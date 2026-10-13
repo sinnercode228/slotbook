@@ -1,0 +1,53 @@
+# Local demo: PostgreSQL, then one-shot migrate and seed, then the server on
+# http://localhost:8080. Override the admin token with SLOTBOOK_ADMIN_TOKEN.
+
+x-slotbook: &slotbook
+  build: .
+  image: slotbook:local
+  environment:
+    SLOTBOOK_DATABASE_URL: postgres://slotbook:slotbook@db:5432/slotbook?sslmode=disable
+    SLOTBOOK_ADMIN_TOKEN: ${SLOTBOOK_ADMIN_TOKEN:-local-demo-admin-token-change-me-0123456789}
+    SLOTBOOK_CORS_ORIGINS: ${SLOTBOOK_CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+    SLOTBOOK_TELEGRAM_BOT_TOKEN: ${SLOTBOOK_TELEGRAM_BOT_TOKEN:-}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: slotbook
+      POSTGRES_PASSWORD: slotbook
+      POSTGRES_DB: slotbook
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slotbook -d slotbook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *slotbook
+    command: ["migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  seed:
+    <<: *slotbook
+    command: ["seed", "seed/demo.json"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  app:
+    <<: *slotbook
+    command: ["serve"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:
