@@ -251,8 +251,8 @@ const ru: Dictionary = {
   'done.addToCalendar': 'Добавить в календарь',
   'done.manage': 'Управлять записью',
   'done.manageHint': 'Сохраните ссылку, чтобы перенести или отменить запись. Изменить запись может любой, у кого она есть.',
-  'done.copyLink': 'Скопировать ссылку',
-  'done.copied': 'Ссылка скопирована',
+  'done.copyLink': 'Копировать',
+  'done.copied': 'Скопировано',
   'done.bookAnother': 'Записаться ещё раз',
 
   'summary.title': 'Ваша запись',
