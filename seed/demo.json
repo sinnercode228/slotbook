@@ -1,0 +1,118 @@
+{
+  "brand": "Snipwell & Co. (demo)",
+  "locations": [
+    {
+      "slug": "snipwell-moscow",
+      "name": "Snipwell Moscow, Primernaya",
+      "time_zone": "Europe/Moscow",
+      "address": "ul. Primernaya 1, Moscow",
+      "settings": {},
+      "services": [
+        {"key": "msk-haircut", "name": "Men's haircut", "duration_minutes": 60, "buffer_after_minutes": 10, "price_minor": 250000, "currency": "RUB"},
+        {"key": "msk-beard", "name": "Beard trim", "duration_minutes": 30, "buffer_after_minutes": 5, "price_minor": 120000, "currency": "RUB"},
+        {"key": "msk-combo", "name": "Haircut and beard", "duration_minutes": 90, "buffer_after_minutes": 10, "price_minor": 340000, "currency": "RUB"},
+        {"key": "msk-kids", "name": "Kids' haircut", "duration_minutes": 45, "buffer_after_minutes": 5, "price_minor": 150000, "currency": "RUB"}
+      ],
+      "staff": [
+        {
+          "key": "msk-arina",
+          "name": "Arina V.",
+          "services": ["msk-haircut", "msk-beard", "msk-combo", "msk-kids"],
+          "weekly_hours": {
+            "monday": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "20:00"}],
+            "tuesday": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "20:00"}],
+            "wednesday": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "20:00"}],
+            "thursday": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "20:00"}],
+            "friday": [{"start": "10:00", "end": "14:00"}, {"start": "15:00", "end": "20:00"}]
+          },
+          "overrides": []
+        },
+        {
+          "key": "msk-timur",
+          "name": "Timur S.",
+          "services": ["msk-haircut", "msk-beard", "msk-combo"],
+          "weekly_hours": {
+            "tuesday": [{"start": "11:00", "end": "15:00"}, {"start": "16:00", "end": "21:00"}],
+            "wednesday": [{"start": "11:00", "end": "15:00"}, {"start": "16:00", "end": "21:00"}],
+            "thursday": [{"start": "11:00", "end": "15:00"}, {"start": "16:00", "end": "21:00"}],
+            "friday": [{"start": "11:00", "end": "15:00"}, {"start": "16:00", "end": "21:00"}],
+            "saturday": [{"start": "11:00", "end": "15:00"}, {"start": "16:00", "end": "21:00"}]
+          },
+          "overrides": []
+        },
+        {
+          "key": "msk-ksenia",
+          "name": "Ksenia B.",
+          "services": ["msk-haircut", "msk-kids"],
+          "weekly_hours": {
+            "wednesday": [{"start": "10:00", "end": "18:00"}],
+            "thursday": [{"start": "10:00", "end": "18:00"}],
+            "friday": [{"start": "10:00", "end": "18:00"}],
+            "saturday": [{"start": "10:00", "end": "18:00"}],
+            "sunday": [{"start": "10:00", "end": "18:00"}]
+          },
+          "overrides": [
+            {"date": "2026-12-31", "intervals": []},
+            {"date": "2027-01-01", "intervals": []}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "snipwell-berlin",
+      "name": "Snipwell Berlin, Beispielstrasse",
+      "time_zone": "Europe/Berlin",
+      "address": "Beispielstrasse 12, Berlin",
+      "settings": {"min_notice_minutes": 60, "cancel_cutoff_minutes": 1440},
+      "services": [
+        {"key": "ber-haircut", "name": "Haircut", "duration_minutes": 45, "buffer_after_minutes": 15, "price_minor": 3800, "currency": "EUR"},
+        {"key": "ber-beard", "name": "Beard trim", "duration_minutes": 30, "buffer_after_minutes": 10, "price_minor": 2200, "currency": "EUR"},
+        {"key": "ber-shave", "name": "Hot towel shave", "duration_minutes": 45, "buffer_after_minutes": 15, "price_minor": 3500, "currency": "EUR"},
+        {"key": "ber-colour", "name": "Colour", "duration_minutes": 90, "buffer_after_minutes": 15, "price_minor": 8500, "currency": "EUR"}
+      ],
+      "staff": [
+        {
+          "key": "ber-lena",
+          "name": "Lena H.",
+          "services": ["ber-haircut", "ber-colour"],
+          "weekly_hours": {
+            "monday": [{"start": "09:00", "end": "13:00"}, {"start": "14:00", "end": "18:00"}],
+            "tuesday": [{"start": "09:00", "end": "13:00"}, {"start": "14:00", "end": "18:00"}],
+            "wednesday": [{"start": "09:00", "end": "13:00"}, {"start": "14:00", "end": "18:00"}],
+            "thursday": [{"start": "09:00", "end": "13:00"}, {"start": "14:00", "end": "18:00"}],
+            "friday": [{"start": "09:00", "end": "13:00"}, {"start": "14:00", "end": "18:00"}]
+          },
+          "overrides": []
+        },
+        {
+          "key": "ber-jonas",
+          "name": "Jonas W.",
+          "services": ["ber-haircut", "ber-beard", "ber-shave"],
+          "weekly_hours": {
+            "tuesday": [{"start": "10:00", "end": "14:00"}, {"start": "14:30", "end": "19:00"}],
+            "wednesday": [{"start": "10:00", "end": "14:00"}, {"start": "14:30", "end": "19:00"}],
+            "thursday": [{"start": "10:00", "end": "14:00"}, {"start": "14:30", "end": "19:00"}],
+            "friday": [{"start": "10:00", "end": "14:00"}, {"start": "14:30", "end": "19:00"}],
+            "saturday": [{"start": "10:00", "end": "14:00"}, {"start": "14:30", "end": "19:00"}]
+          },
+          "overrides": []
+        },
+        {
+          "key": "ber-mila",
+          "name": "Mila N.",
+          "services": ["ber-haircut", "ber-beard", "ber-shave"],
+          "weekly_hours": {
+            "monday": [{"start": "12:00", "end": "20:00"}],
+            "wednesday": [{"start": "12:00", "end": "20:00"}],
+            "friday": [{"start": "12:00", "end": "20:00"}],
+            "saturday": [{"start": "10:00", "end": "16:00"}]
+          },
+          "overrides": [
+            {"date": "2026-12-24", "intervals": [{"start": "10:00", "end": "13:00"}]},
+            {"date": "2026-12-25", "intervals": []}
+          ]
+        }
+      ]
+    }
+  ]
+}
