@@ -1,0 +1,31 @@
+{
+  "description": "Europe/Berlin on 2026-10-25: 02:00-03:00 happens twice; 02:00 and 02:30 mean their first (summer time) occurrence and the repeated hour adds no starts of its own",
+  "input": {
+    "time_zone": "Europe/Berlin",
+    "now": "2026-10-12T08:00:00Z",
+    "from": "2026-10-25",
+    "to": "2026-10-25",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "sunday": [{"start": "01:00", "end": "04:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-25",
+      "slots": [
+        "2026-10-25T01:00:00+02:00",
+        "2026-10-25T01:30:00+02:00",
+        "2026-10-25T02:00:00+02:00",
+        "2026-10-25T02:30:00+02:00",
+        "2026-10-25T03:00:00+01:00"
+      ]
+    }
+  ]
+}

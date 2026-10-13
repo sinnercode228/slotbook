@@ -1,0 +1,32 @@
+{
+  "description": "A 45 minute service with 15 minutes of cleanup needs a free hour: the buffer must not run into a busy interval or past closing",
+  "input": {
+    "time_zone": "Europe/Moscow",
+    "now": "2026-10-12T09:00:00Z",
+    "from": "2026-10-23",
+    "to": "2026-10-23",
+    "duration_minutes": 45,
+    "buffer_after_minutes": 15,
+    "slot_step_minutes": 15,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "friday": [{"start": "10:00", "end": "13:00"}]
+    },
+    "overrides": [],
+    "busy": [
+      {"start": "2026-10-23T11:00:00+03:00", "end": "2026-10-23T11:30:00+03:00"}
+    ]
+  },
+  "expected": [
+    {
+      "date": "2026-10-23",
+      "slots": [
+        "2026-10-23T10:00:00+03:00",
+        "2026-10-23T11:30:00+03:00",
+        "2026-10-23T11:45:00+03:00",
+        "2026-10-23T12:00:00+03:00"
+      ]
+    }
+  ]
+}

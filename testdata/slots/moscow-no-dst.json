@@ -1,0 +1,35 @@
+{
+  "description": "Europe/Moscow has no DST: the weekend when Berlin changes its clocks looks like any other",
+  "input": {
+    "time_zone": "Europe/Moscow",
+    "now": "2026-10-12T08:00:00Z",
+    "from": "2026-10-24",
+    "to": "2026-10-26",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 60,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "saturday": [{"start": "09:00", "end": "11:00"}],
+      "sunday": [{"start": "09:00", "end": "11:00"}],
+      "monday": [{"start": "09:00", "end": "11:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-24",
+      "slots": ["2026-10-24T09:00:00+03:00", "2026-10-24T10:00:00+03:00"]
+    },
+    {
+      "date": "2026-10-25",
+      "slots": ["2026-10-25T09:00:00+03:00", "2026-10-25T10:00:00+03:00"]
+    },
+    {
+      "date": "2026-10-26",
+      "slots": ["2026-10-26T09:00:00+03:00", "2026-10-26T10:00:00+03:00"]
+    }
+  ]
+}

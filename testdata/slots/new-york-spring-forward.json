@@ -1,0 +1,29 @@
+{
+  "description": "America/New_York on 2026-03-08: 02:00-03:00 does not exist; with a 15 minute buffer each start needs a real free hour inside the two real hours of 01:00-04:00",
+  "input": {
+    "time_zone": "America/New_York",
+    "now": "2026-03-01T15:00:00Z",
+    "from": "2026-03-08",
+    "to": "2026-03-08",
+    "duration_minutes": 45,
+    "buffer_after_minutes": 15,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "sunday": [{"start": "01:00", "end": "04:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-03-08",
+      "slots": [
+        "2026-03-08T01:00:00-05:00",
+        "2026-03-08T01:30:00-05:00",
+        "2026-03-08T03:00:00-04:00"
+      ]
+    }
+  ]
+}

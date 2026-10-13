@@ -1,0 +1,35 @@
+{
+  "description": "Ordinary 09:00-11:00 hours keep their wall-clock times across the 2026-10-25 change; days are calendar days, not 24 hour steps",
+  "input": {
+    "time_zone": "Europe/Berlin",
+    "now": "2026-10-12T08:00:00Z",
+    "from": "2026-10-24",
+    "to": "2026-10-26",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 60,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "saturday": [{"start": "09:00", "end": "11:00"}],
+      "sunday": [{"start": "09:00", "end": "11:00"}],
+      "monday": [{"start": "09:00", "end": "11:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-24",
+      "slots": ["2026-10-24T09:00:00+02:00", "2026-10-24T10:00:00+02:00"]
+    },
+    {
+      "date": "2026-10-25",
+      "slots": ["2026-10-25T09:00:00+01:00", "2026-10-25T10:00:00+01:00"]
+    },
+    {
+      "date": "2026-10-26",
+      "slots": ["2026-10-26T09:00:00+01:00", "2026-10-26T10:00:00+01:00"]
+    }
+  ]
+}

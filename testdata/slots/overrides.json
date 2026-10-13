@@ -1,0 +1,42 @@
+{
+  "description": "Date overrides replace the weekly hours: an empty list closes the day, custom intervals can open a normally closed day",
+  "input": {
+    "time_zone": "Europe/Berlin",
+    "now": "2026-11-10T08:00:00Z",
+    "from": "2026-11-16",
+    "to": "2026-11-21",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 60,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "monday": [{"start": "09:00", "end": "12:00"}],
+      "tuesday": [{"start": "09:00", "end": "12:00"}],
+      "wednesday": [{"start": "09:00", "end": "12:00"}]
+    },
+    "overrides": [
+      {"date": "2026-11-16", "intervals": []},
+      {"date": "2026-11-17", "intervals": [{"start": "10:00", "end": "11:00"}, {"start": "15:00", "end": "16:30"}]},
+      {"date": "2026-11-21", "intervals": [{"start": "10:00", "end": "12:00"}]}
+    ],
+    "busy": []
+  },
+  "expected": [
+    {"date": "2026-11-16", "slots": []},
+    {
+      "date": "2026-11-17",
+      "slots": ["2026-11-17T10:00:00+01:00", "2026-11-17T15:00:00+01:00"]
+    },
+    {
+      "date": "2026-11-18",
+      "slots": ["2026-11-18T09:00:00+01:00", "2026-11-18T10:00:00+01:00", "2026-11-18T11:00:00+01:00"]
+    },
+    {"date": "2026-11-19", "slots": []},
+    {"date": "2026-11-20", "slots": []},
+    {
+      "date": "2026-11-21",
+      "slots": ["2026-11-21T10:00:00+01:00", "2026-11-21T11:00:00+01:00"]
+    }
+  ]
+}

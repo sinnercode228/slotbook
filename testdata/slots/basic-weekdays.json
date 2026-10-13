@@ -1,0 +1,44 @@
+{
+  "description": "Plain weekdays in Moscow: a day without hours is empty and an interval may end at 24:00",
+  "input": {
+    "time_zone": "Europe/Moscow",
+    "now": "2026-10-12T09:00:00Z",
+    "from": "2026-10-19",
+    "to": "2026-10-21",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "monday": [{"start": "10:00", "end": "13:00"}],
+      "wednesday": [{"start": "10:00", "end": "12:00"}, {"start": "22:00", "end": "24:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-19",
+      "slots": [
+        "2026-10-19T10:00:00+03:00",
+        "2026-10-19T10:30:00+03:00",
+        "2026-10-19T11:00:00+03:00",
+        "2026-10-19T11:30:00+03:00",
+        "2026-10-19T12:00:00+03:00"
+      ]
+    },
+    {"date": "2026-10-20", "slots": []},
+    {
+      "date": "2026-10-21",
+      "slots": [
+        "2026-10-21T10:00:00+03:00",
+        "2026-10-21T10:30:00+03:00",
+        "2026-10-21T11:00:00+03:00",
+        "2026-10-21T22:00:00+03:00",
+        "2026-10-21T22:30:00+03:00",
+        "2026-10-21T23:00:00+03:00"
+      ]
+    }
+  ]
+}

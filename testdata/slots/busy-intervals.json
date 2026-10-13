@@ -1,0 +1,31 @@
+{
+  "description": "Busy intervals are half-open instants: a slot may end exactly when a booking starts and start exactly when one ends",
+  "input": {
+    "time_zone": "Europe/Moscow",
+    "now": "2026-10-12T09:00:00Z",
+    "from": "2026-10-24",
+    "to": "2026-10-24",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "saturday": [{"start": "10:00", "end": "14:00"}]
+    },
+    "overrides": [],
+    "busy": [
+      {"start": "2026-10-24T08:00:00Z", "end": "2026-10-24T09:30:00Z"},
+      {"start": "2026-10-24T10:30:00Z", "end": "2026-10-24T11:00:00Z"}
+    ]
+  },
+  "expected": [
+    {
+      "date": "2026-10-24",
+      "slots": [
+        "2026-10-24T10:00:00+03:00",
+        "2026-10-24T12:30:00+03:00"
+      ]
+    }
+  ]
+}

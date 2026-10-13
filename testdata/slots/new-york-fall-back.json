@@ -1,0 +1,32 @@
+{
+  "description": "America/New_York on 2026-11-01: 01:00-02:00 happens twice; a booking in the second (EST) 01:30 does not block the first (EDT) 01:30",
+  "input": {
+    "time_zone": "America/New_York",
+    "now": "2026-10-20T15:00:00Z",
+    "from": "2026-11-01",
+    "to": "2026-11-01",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "sunday": [{"start": "00:30", "end": "03:00"}]
+    },
+    "overrides": [],
+    "busy": [
+      {"start": "2026-11-01T01:30:00-05:00", "end": "2026-11-01T02:00:00-05:00"}
+    ]
+  },
+  "expected": [
+    {
+      "date": "2026-11-01",
+      "slots": [
+        "2026-11-01T00:30:00-04:00",
+        "2026-11-01T01:00:00-04:00",
+        "2026-11-01T01:30:00-04:00",
+        "2026-11-01T02:00:00-05:00"
+      ]
+    }
+  ]
+}

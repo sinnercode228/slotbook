@@ -1,0 +1,31 @@
+{
+  "description": "Starts sit on the step grid counted from local midnight, not from the start of the working interval",
+  "input": {
+    "time_zone": "Europe/Moscow",
+    "now": "2026-10-12T09:00:00Z",
+    "from": "2026-10-26",
+    "to": "2026-10-26",
+    "duration_minutes": 30,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 20,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "monday": [{"start": "09:10", "end": "11:00"}, {"start": "13:05", "end": "14:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-26",
+      "slots": [
+        "2026-10-26T09:20:00+03:00",
+        "2026-10-26T09:40:00+03:00",
+        "2026-10-26T10:00:00+03:00",
+        "2026-10-26T10:20:00+03:00",
+        "2026-10-26T13:20:00+03:00"
+      ]
+    }
+  ]
+}
