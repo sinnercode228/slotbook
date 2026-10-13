@@ -20,9 +20,10 @@ import (
 // commits. Sending then happens outside any transaction, so a slow Telegram
 // call holds neither row locks nor a pooled connection. If a worker dies,
 // its rows become due again when the lease ends, which makes delivery
-// at-least-once. Each claim bumps attempts, and every write after a send is
-// conditional on that attempt number, so a worker whose lease ran out cannot
-// overwrite the outcome of a newer attempt.
+// at-least-once. Each claim bumps attempts, and every later write, including
+// the lease renewal right before each send, is conditional on that attempt
+// number: a worker whose lease ran out neither sends a row another worker
+// has claimed since nor overwrites the outcome of that newer attempt.
 type Worker struct {
 	pool   *pgxpool.Pool
 	sender Sender
@@ -184,6 +185,14 @@ func (w *Worker) deliver(ctx context.Context, c claimed) error {
 		return w.record(ctx, c, `status = 'skipped', last_error = $3`, skip)
 	}
 	if err == nil {
+		held, renewErr := w.renew(ctx, c)
+		if renewErr != nil {
+			return renewErr
+		}
+		if !held {
+			log.Info("notification left to the worker that took it over")
+			return nil
+		}
 		sendCtx, cancel := context.WithTimeout(ctx, w.SendTimeout)
 		err = w.sender.Send(sendCtx, msg)
 		cancel()
@@ -201,6 +210,22 @@ func (w *Worker) deliver(ctx context.Context, c claimed) error {
 		log.Info("notification will be retried", "err", err, "retry_at", retryAt)
 		return w.record(ctx, c, `next_attempt_at = $3, last_error = $4`, retryAt, err.Error())
 	}
+}
+
+// renew starts a fresh lease on a claimed row right before its message goes
+// out. A batch is sent one row at a time, so the lease taken at claim time
+// may have run out for rows near its end, and another worker may have
+// claimed them since; renew then reports false and this worker must not
+// send a second copy.
+func (w *Worker) renew(ctx context.Context, c claimed) (bool, error) {
+	tag, err := w.pool.Exec(ctx, `
+		UPDATE notifications SET next_attempt_at = $3
+		WHERE id = $1 AND attempts = $2 AND status = 'pending'`,
+		c.id, c.attempts, w.clock.Now().Add(w.Lease))
+	if err != nil {
+		return false, fmt.Errorf("notify: renew lease of %d: %w", c.id, err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 // compose re-reads the booking and builds the message, or returns the

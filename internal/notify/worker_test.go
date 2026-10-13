@@ -268,3 +268,59 @@ func TestUnrenderableNotificationsUseUpTheirAttempts(t *testing.T) {
 		t.Fatalf("status %s, last error %q", status, lastErr)
 	}
 }
+
+// slowSender stands in for a channel that answers slowly: each send moves
+// the fake clock forward, and an optional hook runs during a given send.
+type slowSender struct {
+	clock    *clock.Fake
+	took     time.Duration
+	sends    *countingSender
+	duringNo int
+	during   func()
+	calls    int
+}
+
+func (s *slowSender) Send(ctx context.Context, m Message) error {
+	s.calls++
+	s.clock.Advance(s.took)
+	if s.calls == s.duringNo && s.during != nil {
+		s.during()
+	}
+	return s.sends.Send(ctx, m)
+}
+
+func TestRowsLateInABatchAreNotSentTwice(t *testing.T) {
+	f := newOutboxFixture(t, 3)
+	ctx := context.Background()
+	sends := &countingSender{sends: map[int64]int{}}
+
+	// Each send takes 40 seconds against a one-minute lease, so the third
+	// row of the batch is still waiting when its lease runs out. Another
+	// worker claims it during the second send.
+	other := f.worker(sends)
+	slow := &slowSender{clock: f.clock, took: 40 * time.Second, sends: sends, duringNo: 2}
+	slow.during = func() {
+		if n, err := other.RunOnce(ctx); err != nil || n != 1 {
+			t.Errorf("second worker claimed %d rows, %v; want the one whose lease ran out", n, err)
+		}
+	}
+	first := f.worker(slow)
+	first.Lease = time.Minute
+	if n, err := first.RunOnce(ctx); err != nil || n != 3 {
+		t.Fatalf("first worker claimed %d rows, %v", n, err)
+	}
+
+	if len(sends.sends) != 3 {
+		t.Fatalf("%d distinct notifications sent, want 3", len(sends.sends))
+	}
+	for id, n := range sends.sends {
+		if n != 1 {
+			t.Errorf("notification %d sent %d times", id, n)
+		}
+	}
+	for _, id := range f.bookings {
+		if status, _, _ := f.statusOf(t, id, KindConfirmation); status != StatusSent {
+			t.Errorf("booking %s: confirmation is %s, want sent", id, status)
+		}
+	}
+}
