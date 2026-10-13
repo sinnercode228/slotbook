@@ -17,6 +17,7 @@ import { normalizeCustomer, serverMessage } from '../domain/customer';
 import { addDays, daysBetween, parseLocalDate, type LocalDate } from '../schedule/date';
 import { generateSlots, offersStart, overlapsBusy, type BusyInterval, type SlotRequest } from '../schedule/generate';
 import { dateOf, formatInstant, parseInstant, startOfDate } from '../schedule/zone';
+import { randomId } from '../lib/randomId';
 import type { Catalog } from './catalog';
 import type { MockState, StoredBooking } from './state';
 
@@ -252,7 +253,7 @@ export class Engine {
     for (const member of eligible) {
       try {
         const row = this.insert({
-          id: crypto.randomUUID(),
+          id: randomId(),
           kind: 'appointment',
           status: 'held',
           locationId: loc.id,
@@ -444,7 +445,7 @@ export class Engine {
     const end = start + svc.duration_minutes * MINUTE;
     const moved = this.insert({
       ...old,
-      id: crypto.randomUUID(),
+      id: randomId(),
       status: 'confirmed',
       start,
       end,
@@ -489,7 +490,7 @@ export class Engine {
     const member = this.catalog.staff.find((s) => s.id === req.staffId);
     if (!member) throw new ApiError(422, 'invalid_staff', 'staff member does not offer this service');
     const row = this.insert({
-      id: crypto.randomUUID(),
+      id: randomId(),
       kind: 'block',
       status: 'confirmed',
       locationId: member.location_id,

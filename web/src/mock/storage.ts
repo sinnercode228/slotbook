@@ -37,47 +37,84 @@ export function memoryStorage(): StateStorage {
   };
 }
 
-function availableLocalStorage(): Storage | null {
-  try {
-    const probe = '__slotbook_probe__';
-    window.localStorage.setItem(probe, probe);
-    window.localStorage.removeItem(probe);
-    return window.localStorage;
-  } catch {
-    return null;
-  }
+const STORE = 'state';
+const KEY = 'current';
+
+function openDatabase(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 /**
- * Keeps the state in localStorage so that it survives reloads and is shared
- * by every tab of the demo. The Web Locks API makes each read-modify-write
- * exclusive across tabs, so two tabs reaching for one slot cannot both get
- * it; the storage event tells the other tabs to refresh.
+ * Keeps the state in IndexedDB so that it survives reloads and is shared by
+ * every tab of the demo. Each call is one readwrite transaction, and the
+ * browser runs those one at a time across tabs, so two tabs reaching for one
+ * slot cannot both get it. localStorage cannot promise that: in Chromium a
+ * write in one tab reaches the others asynchronously, even under a Web Lock.
+ * A BroadcastChannel tells the other tabs to refresh.
  */
-export function browserStorage(key = 'slotbook.demo'): StateStorage {
-  const local = availableLocalStorage();
-  if (!local) return memoryStorage();
-
-  const exclusive = <T>(fn: () => T): Promise<T> =>
-    navigator.locks ? navigator.locks.request(key, () => fn()) : Promise.resolve().then(fn);
+export function browserStorage(name = 'slotbook-demo'): StateStorage {
+  if (typeof indexedDB === 'undefined') return memoryStorage();
+  const database = openDatabase(name).catch(() => null);
+  const fallback = memoryStorage();
+  const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(name);
 
   return {
-    transact: (fn) =>
-      exclusive(() => {
-        const before = local.getItem(key);
-        const draft = decodeState(before);
-        const result = fn(draft);
-        const after = JSON.stringify(draft);
-        if (after !== before) local.setItem(key, after);
-        return result;
-      }),
-    subscribe(onChange) {
-      const handler = (event: StorageEvent) => {
-        if (event.key === key || event.key === null) onChange();
-      };
-      window.addEventListener('storage', handler);
-      return () => window.removeEventListener('storage', handler);
+    async transact<T>(fn: (state: MockState) => T): Promise<T> {
+      const db = await database;
+      if (!db) return fallback.transact(fn);
+      return new Promise<T>((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const store = tx.objectStore(STORE);
+        let result: T;
+        let changed = false;
+        let thrown: { error: unknown } | null = null;
+        const read = store.get(KEY);
+        read.onsuccess = () => {
+          const before = (read.result as string | undefined) ?? null;
+          const draft = decodeState(before);
+          try {
+            result = fn(draft);
+          } catch (error) {
+            thrown = { error };
+            tx.abort();
+            return;
+          }
+          const after = JSON.stringify(draft);
+          if (after !== before) {
+            store.put(after, KEY);
+            changed = true;
+          }
+        };
+        tx.oncomplete = () => {
+          if (changed) channel?.postMessage('changed');
+          resolve(result);
+        };
+        tx.onabort = () => reject(thrown ? thrown.error : tx.error);
+      });
     },
-    clear: () => exclusive(() => local.removeItem(key)),
+    subscribe(onChange) {
+      if (!channel) return () => {};
+      const listener = () => onChange();
+      channel.addEventListener('message', listener);
+      return () => channel.removeEventListener('message', listener);
+    },
+    async clear() {
+      const db = await database;
+      if (!db) return fallback.clear();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(KEY);
+        tx.oncomplete = () => {
+          channel?.postMessage('changed');
+          resolve();
+        };
+        tx.onabort = () => reject(tx.error);
+      });
+    },
   };
 }

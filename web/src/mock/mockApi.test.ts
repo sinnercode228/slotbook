@@ -352,6 +352,13 @@ describe('state shared between tabs', () => {
     expect((await apiError(api.createHold({ serviceId: HAIRCUT, staffId: LENA, start }))).code).toBe('slot_taken');
   });
 
+  it('takes an "any staff" slot from everyone free at that time', async () => {
+    const start = '2026-10-14T13:00:00+02:00';
+    await api.demo.bookForSomeoneElse({ serviceId: HAIRCUT, staffId: null, start });
+    expect(await slotsOn('2026-10-14', null)).not.toContain('13:00');
+    expect((await apiError(api.createHold({ serviceId: HAIRCUT, staffId: null, start }))).code).toBe('slot_taken');
+  });
+
   it('starts a fresh demo with sample bookings that follow the rules', async () => {
     const seeded = createMockApi({ storage: memoryStorage(), clock: () => now });
     const day = await seeded.admin('t').listBookings(BERLIN, '2026-10-13');

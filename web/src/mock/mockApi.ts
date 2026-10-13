@@ -1,4 +1,5 @@
 import type { BookingApi, HoldRequest } from '../api/client';
+import { ApiError } from '../api/errors';
 import type { Booking } from '../api/types';
 import { demoCatalog, type Catalog } from './catalog';
 import { Engine } from './engine';
@@ -81,9 +82,21 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       reset: () => storage.clear(),
       bookForSomeoneElse: (req) =>
         call((e) => {
-          const hold = e.hold(req);
-          const who = SAMPLE_CUSTOMERS[Math.floor(Math.random() * SAMPLE_CUSTOMERS.length)]!;
-          return e.confirm(hold.hold_token, who, '').booking;
+          // With "any staff" the time is taken from everyone free then, so
+          // that it is really gone for the visitor who sees it.
+          const booked: Booking[] = [];
+          do {
+            let hold;
+            try {
+              hold = e.hold(req);
+            } catch (err) {
+              if (booked.length > 0 && err instanceof ApiError && err.code === 'slot_taken') break;
+              throw err;
+            }
+            const who = SAMPLE_CUSTOMERS[Math.floor(Math.random() * SAMPLE_CUSTOMERS.length)]!;
+            booked.push(e.confirm(hold.hold_token, who, '').booking);
+          } while (req.staffId === null);
+          return booked[0]!;
         }),
     },
   };

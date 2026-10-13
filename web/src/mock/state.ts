@@ -1,7 +1,7 @@
 import type { BookingKind, BookingStatus, Confirmation, Customer, Money, NotificationKind, NotificationStatus } from '../api/types';
 
-// What the mock keeps, as plain JSON so it fits in localStorage. Instants
-// are epoch milliseconds; the API views format them in the location's zone.
+// What the mock keeps, stored as one JSON document. Instants are epoch
+// milliseconds; the API views format them in the location's zone.
 // The demo keeps tokens as they are: everything stays in the visitor's own
 // browser, unlike the server, which stores only their hashes.
 
