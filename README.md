@@ -50,7 +50,7 @@ sequenceDiagram
     API-->>B: 409 slot_taken
 ```
 
-Two inserts that arrive at the same moment can also each find the other's uncommitted row and wait for it; PostgreSQL's deadlock detector then aborts one of them with `40P01` after `deadlock_timeout` (1 s by default). Holds, blocks and reschedules run their transactions through [`inTx`](internal/booking/tx.go#L20-L54), which runs a transaction aborted this way again from the start, so the loser still gets `409 slot_taken`, not `500`.
+Two inserts that arrive at the same moment can also each find the other's uncommitted row and wait for it. So can an insert and the confirmation of a hold it overlaps, because confirming writes a new version of the held row. PostgreSQL's deadlock detector then aborts one of them with `40P01` after `deadlock_timeout` (1 s by default). Holds, confirmations, blocks and reschedules run their transactions through [`inTx`](internal/booking/tx.go#L20-L54), which runs a transaction aborted this way again from the start (at most five runs in all), so instead of a `500` the loser still gets `409 slot_taken` and the confirmation goes through.
 
 The same constraint covers every other path that puts time on a calendar:
 
@@ -198,7 +198,7 @@ SLOTBOOK_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/slotbook
 cd web && npm run lint && npm test
 ```
 
-Go: 114 test functions and 92 subtests pass, counted as `pass` events in `go test -json`. 58 of the 114 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds and confirms, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end. The subtests include the 23 slot vectors.
+Go: 115 test functions and 92 subtests pass, counted as `pass` events in `go test -json`. 59 of the 115 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds and confirms, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end. The subtests include the 23 slot vectors.
 
 Web: 121 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 28 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, an expired hold, a lost connection, a reload), the manage page, `.ics` files and i18n.
 

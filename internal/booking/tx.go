@@ -22,13 +22,13 @@ type beginner interface {
 // start in a new one, up to txAttempts times in all. When ctx is done it
 // stops retrying and returns the last error.
 //
-// Two inserts of overlapping periods at the same moment can each wait for the
-// other's entry in the exclusion constraint's index, and the deadlock
-// detector aborts one of them instead of letting it fail with 23P01. With
-// more such inserts it aborts one per deadlock_timeout until one is left. A
-// victim that came straight back with a new entry would join that chain
-// again, so a retry starts by taking an advisory lock and retries go one at
-// a time.
+// Two writes that add overlapping periods to the exclusion constraint's index
+// at the same moment (inserts, or the update that confirms a hold) can each
+// wait for the other's entry, and the deadlock detector aborts one of them
+// instead of letting it fail with 23P01. With more such writes it aborts one
+// per deadlock_timeout until one is left. A victim that came straight back
+// with a new entry would join that chain again, so a retry starts by taking
+// an advisory lock and retries go one at a time.
 func inTx(ctx context.Context, b beginner, fn func(pgx.Tx) error) error {
 	for attempt := 1; ; attempt++ {
 		err := pgx.BeginFunc(ctx, b, func(tx pgx.Tx) error {

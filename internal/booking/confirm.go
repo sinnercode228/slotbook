@@ -55,7 +55,7 @@ func (m *Manager) Confirm(ctx context.Context, req ConfirmRequest, idempotencyKe
 	}
 
 	now := m.clock.Now()
-	err = pgx.BeginFunc(ctx, m.pool, func(tx pgx.Tx) error {
+	err = inTx(ctx, m.pool, func(tx pgx.Tx) error {
 		if idempotencyKey != "" {
 			stored, found, err := reserveKey(ctx, tx, confirmScope, idempotencyKey, fingerprint, now)
 			if err != nil {

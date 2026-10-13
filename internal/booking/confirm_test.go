@@ -3,6 +3,7 @@ package booking_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -198,5 +199,50 @@ func TestConcurrentConfirmsWithOneKeyShareOneResult(t *testing.T) {
 	}
 	if fresh != 1 {
 		t.Fatalf("%d confirms ran for real, want exactly 1", fresh)
+	}
+}
+
+// Confirming writes a new version of the held row, and that version goes into
+// the constraint's index like an inserted row. So a confirm can deadlock with
+// a hold or a block inserted on the same period at the same moment (see
+// TestSimultaneousHoldsNeverFailWithADeadlock), and it must still go through.
+// The deadlock needs the confirm's UPDATE to meet the others' INSERTs, so each
+// round starts the confirm a little later than the one before.
+func TestSimultaneousConfirmsAndInsertsNeverFailWithADeadlock(t *testing.T) {
+	const rounds, n = 160, 4
+	f := newRaceFixture(t, n)
+	ctx := context.Background()
+	start := at(2026, time.October, 14, 10, 0)
+	for round := range rounds {
+		h := f.hold(t, f.lena(), start)
+		delay := time.Duration(round%40) * 25 * time.Microsecond
+		var (
+			c        booking.Confirmation
+			replayed bool
+		)
+		errs := race(n, func(i int) error {
+			var err error
+			switch {
+			case i == 0:
+				for begun := time.Now(); time.Since(begun) < delay; {
+				}
+				req := booking.ConfirmRequest{HoldToken: h.Token, Customer: anna}
+				c, replayed, err = f.manager.Confirm(ctx, req, fmt.Sprintf("round-%d", round))
+			case i%2 == 0:
+				_, err = f.manager.CreateBlock(ctx, booking.BlockRequest{StaffID: f.lena(), Start: start, End: start.Add(time.Hour)})
+			default:
+				_, err = f.manager.Hold(ctx, booking.HoldRequest{ServiceID: f.haircut(), StaffID: f.lena(), Start: start})
+			}
+			return err
+		})
+		if errs[0] != nil {
+			t.Fatalf("round %d: confirm: %v", round, errs[0])
+		}
+		f.checkOneWinner(t, round, errs, start, start.Add(time.Hour))
+		got, err := f.manager.Get(ctx, h.Booking.ID, c.ManageToken)
+		if err != nil || replayed || got.Status != booking.StatusConfirmed {
+			t.Fatalf("round %d: the returned manage token gives %+v, %v (replayed %t)", round, got, err, replayed)
+		}
+		f.clearBookings(t)
 	}
 }
