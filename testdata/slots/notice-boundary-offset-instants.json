@@ -1,0 +1,40 @@
+{
+  "description": "Instants given with other offsets and milliseconds: now is one millisecond past 09:00 in Berlin, so with 60 minutes of notice 10:00 is gone; a busy interval written in +05:30 takes 12:30, and 12:00 still fits because busy time is half-open",
+  "input": {
+    "time_zone": "Europe/Berlin",
+    "now": "2026-10-19T10:00:00.001+03:00",
+    "from": "2026-10-19",
+    "to": "2026-10-20",
+    "duration_minutes": 30,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 60,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "monday": [{"start": "09:00", "end": "13:00"}],
+      "tuesday": [{"start": "09:00", "end": "11:00"}]
+    },
+    "overrides": [],
+    "busy": [{"start": "2026-10-19T16:00:00+05:30", "end": "2026-10-19T11:00:00Z"}]
+  },
+  "expected": [
+    {
+      "date": "2026-10-19",
+      "slots": [
+        "2026-10-19T10:30:00+02:00",
+        "2026-10-19T11:00:00+02:00",
+        "2026-10-19T11:30:00+02:00",
+        "2026-10-19T12:00:00+02:00"
+      ]
+    },
+    {
+      "date": "2026-10-20",
+      "slots": [
+        "2026-10-20T09:00:00+02:00",
+        "2026-10-20T09:30:00+02:00",
+        "2026-10-20T10:00:00+02:00",
+        "2026-10-20T10:30:00+02:00"
+      ]
+    }
+  ]
+}

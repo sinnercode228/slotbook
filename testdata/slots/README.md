@@ -31,7 +31,9 @@ the generator should run the same files and produce the same strings.
 ```
 
 - `time_zone` is an IANA zone name. All wall-clock values are in this zone.
-- `now`, `busy[].start` and `busy[].end` are RFC 3339 instants (any offset).
+- `now`, `busy[].start` and `busy[].end` are RFC 3339 instants (any offset),
+  with at most millisecond precision: the TypeScript port counts time in
+  milliseconds.
 - `from` and `to` are local dates (`YYYY-MM-DD`), both inclusive.
 - `weekly_hours` maps lowercase English day names (`monday` ... `sunday`) to
   working intervals; a missing day has no hours. Times are `HH:MM`, the end is
