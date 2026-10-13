@@ -1,6 +1,9 @@
 .git
 .github
-.env
+# Local settings stay out of the image: Vite reads web/.env and
+# web/.env.local, so they would change how the widget is built.
+**/.env
+**/.env.*
 **/node_modules
 web/dist
 bin
