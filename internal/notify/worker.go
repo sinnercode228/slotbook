@@ -173,21 +173,51 @@ func staleReason(kind Kind, b bookingState, now time.Time) string {
 	return ""
 }
 
+// deliver sends one claimed notification and records the outcome. A
+// message that cannot even be built counts as a failed attempt, so a broken
+// row ends up failed instead of being retried forever.
 func (w *Worker) deliver(ctx context.Context, c claimed) error {
 	log := w.log.With("notification_id", c.id, "booking_id", c.bookingID, "kind", c.kind, "attempt", c.attempts)
+	msg, skip, err := w.compose(ctx, c)
+	if err == nil && skip != "" {
+		log.Info("notification skipped", "reason", skip)
+		return w.record(ctx, c, `status = 'skipped', last_error = $3`, skip)
+	}
+	if err == nil {
+		sendCtx, cancel := context.WithTimeout(ctx, w.SendTimeout)
+		err = w.sender.Send(sendCtx, msg)
+		cancel()
+	}
+
+	now := w.clock.Now()
+	switch {
+	case err == nil:
+		return w.record(ctx, c, `status = 'sent', sent_at = $3, last_error = NULL`, now)
+	case c.attempts >= w.MaxAttempts:
+		log.Warn("notification failed for good", "err", err)
+		return w.record(ctx, c, `status = 'failed', last_error = $3`, err.Error())
+	default:
+		retryAt := now.Add(Backoff(c.attempts))
+		log.Info("notification will be retried", "err", err, "retry_at", retryAt)
+		return w.record(ctx, c, `next_attempt_at = $3, last_error = $4`, retryAt, err.Error())
+	}
+}
+
+// compose re-reads the booking and builds the message, or returns the
+// reason the notification no longer applies.
+func (w *Worker) compose(ctx context.Context, c claimed) (Message, string, error) {
 	b, err := w.loadBooking(ctx, c.bookingID)
 	if err != nil {
-		return fmt.Errorf("notify: load booking %s: %w", c.bookingID, err)
+		return Message{}, "", fmt.Errorf("load booking: %w", err)
 	}
 	if reason := staleReason(c.kind, b, w.clock.Now()); reason != "" {
-		log.Info("notification skipped", "reason", reason)
-		return w.record(ctx, c, `status = 'skipped', last_error = $3`, reason)
+		return Message{}, reason, nil
 	}
 	zone, err := time.LoadLocation(b.timeZone)
 	if err != nil {
-		return fmt.Errorf("notify: booking %s: %w", c.bookingID, err)
+		return Message{}, "", fmt.Errorf("location time zone: %w", err)
 	}
-	msg := Message{
+	return Message{
 		NotificationID: c.id,
 		BookingID:      c.bookingID,
 		Kind:           c.kind,
@@ -204,24 +234,7 @@ func (w *Worker) deliver(ctx context.Context, c claimed) error {
 			Zone:         zone,
 			Rescheduled:  b.rescheduled,
 		}),
-	}
-
-	sendCtx, cancel := context.WithTimeout(ctx, w.SendTimeout)
-	sendErr := w.sender.Send(sendCtx, msg)
-	cancel()
-
-	now := w.clock.Now()
-	switch {
-	case sendErr == nil:
-		return w.record(ctx, c, `status = 'sent', sent_at = $3, last_error = NULL`, now)
-	case c.attempts >= w.MaxAttempts:
-		log.Warn("notification failed for good", "err", sendErr)
-		return w.record(ctx, c, `status = 'failed', last_error = $3`, sendErr.Error())
-	default:
-		retryAt := now.Add(Backoff(c.attempts))
-		log.Info("notification will be retried", "err", sendErr, "retry_at", retryAt)
-		return w.record(ctx, c, `next_attempt_at = $3, last_error = $4`, retryAt, sendErr.Error())
-	}
+	}, "", nil
 }
 
 // record applies an update to the claimed row, fenced by the attempt number

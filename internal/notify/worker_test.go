@@ -253,3 +253,20 @@ func TestExpiredLeaseCannotOverwriteANewerAttempt(t *testing.T) {
 		t.Fatalf("status %s after %d attempts, want sent after 2", status, attempts)
 	}
 }
+
+func TestUnrenderableNotificationsUseUpTheirAttempts(t *testing.T) {
+	f := newOutboxFixture(t, 1)
+	ctx := context.Background()
+	if _, err := f.pool.Exec(ctx, `UPDATE locations SET time_zone = 'Mars/Olympus_Mons'`); err != nil {
+		t.Fatal(err)
+	}
+	w := f.worker(&countingSender{sends: map[int64]int{}})
+	w.MaxAttempts = 1
+	if _, err := w.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	status, _, lastErr := f.statusOf(t, f.bookings[0], KindConfirmation)
+	if status != StatusFailed || !strings.Contains(lastErr, "Mars/Olympus_Mons") {
+		t.Fatalf("status %s, last error %q", status, lastErr)
+	}
+}
