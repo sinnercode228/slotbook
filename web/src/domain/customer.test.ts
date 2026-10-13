@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCustomer } from './customer';
+import { normalizeCustomer, problemFromServerMessage } from './customer';
 
 // The cases mirror internal/booking/customer_test.go: the form must accept
 // exactly what the server accepts.
@@ -43,5 +43,13 @@ describe('normalizeCustomer', () => {
     const result = normalizeCustomer({ name: '', phone: '12', email: 'x' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.problems.map((p) => p.field)).toEqual(['name', 'phone', 'email']);
+  });
+});
+
+describe('problemFromServerMessage', () => {
+  it('maps the server wording back to a field', () => {
+    expect(problemFromServerMessage('customer.phone: must have 7 to 15 digits')).toEqual({ field: 'phone', problem: 'required' });
+    expect(problemFromServerMessage('customer.email: is not a valid address')).toEqual({ field: 'email', problem: 'email_invalid' });
+    expect(problemFromServerMessage('hold_token: is required')).toBeNull();
   });
 });

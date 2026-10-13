@@ -70,3 +70,15 @@ export function serverMessage(field: CustomerField, problem: CustomerProblem): s
   };
   return `customer.${field}: ${messages[problem]}`;
 }
+
+/** Finds which field a server validation message is about, if it is one of ours. */
+export function problemFromServerMessage(message: string): { field: CustomerField; problem: CustomerProblem } | null {
+  const fields: CustomerField[] = ['name', 'phone', 'email'];
+  const problems: CustomerProblem[] = ['required', 'too_long', 'phone_characters', 'phone_digits', 'email_invalid'];
+  for (const field of fields) {
+    for (const problem of problems) {
+      if (serverMessage(field, problem) === message) return { field, problem };
+    }
+  }
+  return null;
+}
