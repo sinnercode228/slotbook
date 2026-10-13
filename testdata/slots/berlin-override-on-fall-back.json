@@ -1,0 +1,28 @@
+{
+  "description": "Europe/Berlin on 2026-10-25: an override replaces the Sunday hours with 02:30-04:00, which opens at the first 02:30 (summer time) and closes at 04:00 winter time, two and a half real hours; the repeated 02:30 adds no start",
+  "input": {
+    "time_zone": "Europe/Berlin",
+    "now": "2026-10-12T08:00:00Z",
+    "from": "2026-10-25",
+    "to": "2026-10-25",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "sunday": [{"start": "09:00", "end": "17:00"}]
+    },
+    "overrides": [{"date": "2026-10-25", "intervals": [{"start": "02:30", "end": "04:00"}]}],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-25",
+      "slots": [
+        "2026-10-25T02:30:00+02:00",
+        "2026-10-25T03:00:00+01:00"
+      ]
+    }
+  ]
+}

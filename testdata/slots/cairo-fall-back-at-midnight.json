@@ -1,0 +1,36 @@
+{
+  "description": "Africa/Cairo on 2026-10-29: at 24:00 summer time the clocks go back to 23:00, so an interval ending at 24:00 closes at the only midnight, one real hour later than it looks, and the next day starts at that midnight",
+  "input": {
+    "time_zone": "Africa/Cairo",
+    "now": "2026-10-20T08:00:00Z",
+    "from": "2026-10-29",
+    "to": "2026-10-30",
+    "duration_minutes": 120,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "thursday": [{"start": "22:00", "end": "24:00"}],
+      "friday": [{"start": "00:00", "end": "02:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-29",
+      "slots": [
+        "2026-10-29T22:00:00+03:00",
+        "2026-10-29T22:30:00+03:00",
+        "2026-10-29T23:00:00+03:00"
+      ]
+    },
+    {
+      "date": "2026-10-30",
+      "slots": [
+        "2026-10-30T00:00:00+02:00"
+      ]
+    }
+  ]
+}

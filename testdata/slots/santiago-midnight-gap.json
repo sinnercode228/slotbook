@@ -1,0 +1,38 @@
+{
+  "description": "America/Santiago on 2026-09-06: clocks jump from 00:00 to 01:00, so midnight itself does not exist. Saturday's interval ending at 24:00 closes at the jump, and Sunday's 00:00 and 00:30 starts are skipped",
+  "input": {
+    "time_zone": "America/Santiago",
+    "now": "2026-09-01T12:00:00Z",
+    "from": "2026-09-05",
+    "to": "2026-09-06",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 30,
+    "min_notice_minutes": 0,
+    "horizon_days": 60,
+    "weekly_hours": {
+      "saturday": [{"start": "22:00", "end": "24:00"}],
+      "sunday": [{"start": "00:00", "end": "03:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-09-05",
+      "slots": [
+        "2026-09-05T22:00:00-04:00",
+        "2026-09-05T22:30:00-04:00",
+        "2026-09-05T23:00:00-04:00"
+      ]
+    },
+    {
+      "date": "2026-09-06",
+      "slots": [
+        "2026-09-06T01:00:00-03:00",
+        "2026-09-06T01:30:00-03:00",
+        "2026-09-06T02:00:00-03:00"
+      ]
+    }
+  ]
+}

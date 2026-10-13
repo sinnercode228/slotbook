@@ -1,0 +1,47 @@
+{
+  "description": "America/Los_Angeles at 03:00 UTC on 2026-10-20, which is still 20:00 on 2026-10-19 locally: today is the 19th, so its evening slot is open and the horizon of one day ends on the 20th",
+  "input": {
+    "time_zone": "America/Los_Angeles",
+    "now": "2026-10-20T03:00:00Z",
+    "from": "2026-10-19",
+    "to": "2026-10-21",
+    "duration_minutes": 60,
+    "buffer_after_minutes": 0,
+    "slot_step_minutes": 60,
+    "min_notice_minutes": 0,
+    "horizon_days": 1,
+    "weekly_hours": {
+      "monday": [{"start": "09:00", "end": "21:00"}],
+      "tuesday": [{"start": "09:00", "end": "21:00"}],
+      "wednesday": [{"start": "09:00", "end": "21:00"}]
+    },
+    "overrides": [],
+    "busy": []
+  },
+  "expected": [
+    {
+      "date": "2026-10-19",
+      "slots": [
+        "2026-10-19T20:00:00-07:00"
+      ]
+    },
+    {
+      "date": "2026-10-20",
+      "slots": [
+        "2026-10-20T09:00:00-07:00",
+        "2026-10-20T10:00:00-07:00",
+        "2026-10-20T11:00:00-07:00",
+        "2026-10-20T12:00:00-07:00",
+        "2026-10-20T13:00:00-07:00",
+        "2026-10-20T14:00:00-07:00",
+        "2026-10-20T15:00:00-07:00",
+        "2026-10-20T16:00:00-07:00",
+        "2026-10-20T17:00:00-07:00",
+        "2026-10-20T18:00:00-07:00",
+        "2026-10-20T19:00:00-07:00",
+        "2026-10-20T20:00:00-07:00"
+      ]
+    },
+    {"date": "2026-10-21", "slots": []}
+  ]
+}
