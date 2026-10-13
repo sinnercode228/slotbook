@@ -40,12 +40,12 @@ export function parseInterval(raw: IntervalJSON): Interval {
 }
 
 /** Reads the JSON form used by the seed file and the golden vectors. */
-export function parseWeeklyHours(raw: Record<string, IntervalJSON[]>): WeeklyHours {
+export function parseWeeklyHours(raw: Readonly<Record<string, IntervalJSON[] | undefined>>): WeeklyHours {
   const weekly: WeeklyHours = DAY_NAMES.map(() => []);
   for (const [name, intervals] of Object.entries(raw)) {
     const day = DAY_NAMES.indexOf(name);
     if (day < 0) throw new Error(`unknown weekday "${name}"`);
-    weekly[day] = intervals.map(parseInterval);
+    weekly[day] = (intervals ?? []).map(parseInterval);
   }
   return weekly;
 }
