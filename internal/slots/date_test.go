@@ -93,3 +93,23 @@ func mustZone(t *testing.T, name string) *time.Location {
 	}
 	return loc
 }
+
+func TestDateStartIsTheFirstInstantOfTheLocalDay(t *testing.T) {
+	cases := []struct {
+		zone string
+		date Date
+		want string
+	}{
+		{"Europe/Moscow", Date{2026, time.October, 20}, "2026-10-19T21:00:00Z"},
+		{"Europe/Berlin", Date{2026, time.March, 29}, "2026-03-28T23:00:00Z"},
+		{"Europe/Berlin", Date{2026, time.March, 30}, "2026-03-29T22:00:00Z"},
+		// Chile moves its clocks at midnight, so 2026-09-06 begins at 01:00.
+		{"America/Santiago", Date{2026, time.September, 6}, "2026-09-06T04:00:00Z"},
+	}
+	for _, c := range cases {
+		got := c.date.Start(mustZone(t, c.zone))
+		if got.UTC().Format(time.RFC3339) != c.want {
+			t.Errorf("%s in %s starts at %s, want %s", c.date, c.zone, got.UTC().Format(time.RFC3339), c.want)
+		}
+	}
+}

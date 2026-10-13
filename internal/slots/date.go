@@ -40,6 +40,12 @@ func (d Date) midnightUTC() time.Time {
 	return time.Date(d.Year, d.Month, d.Day, 0, 0, 0, 0, time.UTC)
 }
 
+// Start returns the first instant of the date in loc. That is usually
+// midnight, but not in zones that move their clocks at midnight.
+func (d Date) Start(loc *time.Location) time.Time {
+	return edge(d, 0, loc)
+}
+
 func (d Date) AddDays(n int) Date {
 	return DateOf(d.midnightUTC().AddDate(0, 0, n))
 }
