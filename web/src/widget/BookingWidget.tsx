@@ -13,6 +13,7 @@ import { ConfirmationView } from './ConfirmationView';
 import { emptyContact, type ContactValues } from './contact';
 import { ContactForm } from './ContactForm';
 import { HoldTimer } from './HoldTimer';
+import { loadProgress, saveProgress } from './progress';
 import { SlotPicker } from './SlotPicker';
 import { StepHeader } from './StepHeader';
 import { SummaryBar, SummaryCard, type EditableStep, type SummaryProps } from './Summary';
@@ -73,6 +74,31 @@ const initial: State = {
 const STEP_NUMBER: Record<Exclude<Step, 'done'>, number> = { location: 1, service: 2, staff: 3, time: 4, details: 5 };
 const PREVIOUS: Partial<Record<Step, Step>> = { service: 'location', staff: 'service', time: 'staff', details: 'time' };
 
+/** Whether a saved state has everything its step needs. */
+function isComplete(s: State): boolean {
+  switch (s.step) {
+    case 'location':
+      return true;
+    case 'service':
+      return Boolean(s.location);
+    case 'staff':
+      return Boolean(s.location && s.service);
+    case 'time':
+      return Boolean(s.location && s.service) && s.staff !== undefined;
+    case 'details':
+      return Boolean(s.location && s.service && s.hold);
+    case 'done':
+      return Boolean(s.location && s.service && s.confirmation);
+    default:
+      return false;
+  }
+}
+
+/** The state saved before a reload, without the notice: it may hold an error object JSON cannot keep. */
+function restoredState(saved: State | undefined): State {
+  return saved && isComplete(saved) ? { ...initial, ...saved, notice: null } : initial;
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'location':
@@ -116,10 +142,11 @@ export function BookingWidget() {
   const api = useApi();
   const { t, locale } = useI18n();
   const errorMessage = useErrorMessage();
-  const [state, dispatch] = useReducer(reducer, initial);
+  const [saved] = useState(() => loadProgress<State>());
+  const [state, dispatch] = useReducer(reducer, saved?.state, restoredState);
   const [pendingStart, setPendingStart] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [contact, setContact] = useState<ContactValues>(emptyContact);
+  const [contact, setContact] = useState<ContactValues>(() => saved?.contact ?? emptyContact);
   const [confirming, setConfirming] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [serverProblem, setServerProblem] = useState<{ field: CustomerField; problem: CustomerProblem } | null>(null);
@@ -128,6 +155,8 @@ export function BookingWidget() {
   const firstRender = useRef(true);
 
   const { step, location, service, staff, hold } = state;
+
+  useEffect(() => saveProgress({ state, contact }), [state, contact]);
 
   // Move focus and the viewport to the new step, as a page change would.
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useDemo } from '../app/ApiContext';
 import { useI18n } from '../i18n/useI18n';
 import { formatDateTime } from '../lib/format';
+import { forgetProgress } from '../widget/progress';
 import styles from './DemoBar.module.css';
 import { useVisibleSlots } from './visibleSlots';
 
@@ -35,6 +36,7 @@ export function DemoBar() {
   async function reset() {
     setBusy(true);
     await demo?.reset();
+    forgetProgress();
     window.location.hash = '#/';
     window.location.reload();
   }

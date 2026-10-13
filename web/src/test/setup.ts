@@ -4,4 +4,6 @@ import { afterEach } from 'vitest';
 
 afterEach(() => {
   cleanup();
+  // Files that run in the node environment have no browser storage.
+  globalThis.sessionStorage?.clear();
 });

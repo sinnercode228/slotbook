@@ -13,8 +13,13 @@ import { BookingWidget } from './BookingWidget';
 function setup(overrides: (api: BookingApi) => Partial<BookingApi> = () => ({})) {
   const base = createMockApi({ storage: memoryStorage(), samples: false });
   const api: BookingApi = { ...base, ...overrides(base) };
-  renderWith(<BookingWidget />, { api });
-  return { user: userEvent.setup(), api };
+  const view = renderWith(<BookingWidget />, { api });
+  /** Unmounts the widget and mounts a fresh one, as a page reload does. */
+  const reload = () => {
+    view.unmount();
+    renderWith(<BookingWidget />, { api });
+  };
+  return { user: userEvent.setup(), api, reload };
 }
 
 async function reachSlots(user: ReturnType<typeof userEvent.setup>) {
@@ -84,6 +89,43 @@ describe('BookingWidget', () => {
     expect(await screen.findByRole('heading', { name: 'You’re booked' })).toBeInTheDocument();
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(confirm.mock.calls[1]![2]).toBe(confirm.mock.calls[0]![2]);
+  });
+
+  it('keeps the running hold and the typed details across a reload', async () => {
+    const createHold = vi.fn();
+    const { user, reload } = setup((base) => ({ createHold: createHold.mockImplementation(base.createHold) }));
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    await user.type(await screen.findByLabelText('Name'), 'Anna');
+    reload();
+    expect(await screen.findByRole('timer')).toHaveTextContent('10:00');
+    expect(screen.getByLabelText('Name')).toHaveValue('Anna');
+    await user.type(screen.getByLabelText('Phone'), '+7 900 123-45-67');
+    await user.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    expect(await screen.findByRole('heading', { name: 'You’re booked' })).toBeInTheDocument();
+    expect(createHold).toHaveBeenCalledTimes(1);
+  });
+
+  it('still shows the confirmation and its manage link after a reload', async () => {
+    const { user, reload } = setup();
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    await fillAndConfirm(user);
+    const link = await screen.findByRole('link', { name: 'Manage booking' });
+    const href = link.getAttribute('href');
+    reload();
+    expect(await screen.findByRole('heading', { name: 'You’re booked' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage booking' })).toHaveAttribute('href', href);
+  });
+
+  it('starts from the first step after "Book another visit"', async () => {
+    const { user, reload } = setup();
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    await fillAndConfirm(user);
+    await user.click(await screen.findByRole('button', { name: /Book another/ }));
+    reload();
+    expect(await screen.findByRole('heading', { name: 'Choose a salon' })).toBeInTheDocument();
   });
 
   it('lets the visitor return to the time list without losing their own hold', async () => {
