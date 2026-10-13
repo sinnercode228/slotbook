@@ -20,7 +20,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U slotbook -d slotbook"]
+      # Over TCP: while the image initialises a new volume it runs a
+      # temporary server on the Unix socket only, which must not count.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U slotbook -d slotbook"]
       interval: 5s
       timeout: 5s
       retries: 10
