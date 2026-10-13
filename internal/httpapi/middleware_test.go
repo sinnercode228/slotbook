@@ -98,7 +98,7 @@ func TestCORS(t *testing.T) {
 	}
 }
 
-func TestRequestIDIsGeneratedOrPassedThrough(t *testing.T) {
+func TestRequestIDIsCreatedOrPassedThrough(t *testing.T) {
 	var seen string
 	h := withRequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = requestIDFrom(r.Context())
@@ -107,7 +107,7 @@ func TestRequestIDIsGeneratedOrPassedThrough(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if seen == "" || rec.Header().Get("X-Request-ID") != seen {
-		t.Fatalf("generated id %q, header %q", seen, rec.Header().Get("X-Request-ID"))
+		t.Fatalf("new id %q, header %q", seen, rec.Header().Get("X-Request-ID"))
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

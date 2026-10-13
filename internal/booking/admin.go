@@ -49,8 +49,8 @@ func (m *Manager) CreateBlock(ctx context.Context, req BlockRequest) (Booking, e
 		}
 		var err error
 		b, err = scanBooking(tx.QueryRow(ctx, `
-			INSERT INTO bookings (kind, status, location_id, staff_id, starts_at, ends_at, busy_until, note, created_at)
-			VALUES ('block', 'confirmed', $1, $2, $3, $4, $4, $5, $6)
+			INSERT INTO bookings (kind, status, location_id, staff_id, starts_at, ends_at, busy_until, period, note, created_at)
+			VALUES ('block', 'confirmed', $1, $2, $3, $4, $4, tstzrange($3, $4, '[)'), $5, $6)
 			RETURNING `+bookingColumns, member.LocationID, member.ID, req.Start, req.End, req.Note, now))
 		return err
 	})

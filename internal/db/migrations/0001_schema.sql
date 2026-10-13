@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE TABLE locations (
-    id                    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id                    bigserial PRIMARY KEY,
     slug                  text NOT NULL UNIQUE,
     name                  text NOT NULL,
     time_zone             text NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE locations (
 );
 
 CREATE TABLE staff (
-    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id          bigserial PRIMARY KEY,
     location_id bigint NOT NULL REFERENCES locations (id),
     name        text NOT NULL,
     active      boolean NOT NULL DEFAULT true
@@ -23,7 +23,7 @@ CREATE TABLE staff (
 CREATE INDEX staff_location_idx ON staff (location_id);
 
 CREATE TABLE services (
-    id                   bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id                   bigserial PRIMARY KEY,
     location_id          bigint NOT NULL REFERENCES locations (id),
     name                 text NOT NULL,
     duration_minutes     integer NOT NULL CHECK (duration_minutes > 0),
@@ -81,7 +81,8 @@ CREATE TABLE bookings (
     ends_at           timestamptz NOT NULL,
     -- ends_at plus the service's cleanup buffer.
     busy_until        timestamptz NOT NULL,
-    period            tstzrange GENERATED ALWAYS AS (tstzrange(starts_at, busy_until, '[)')) STORED,
+    -- [starts_at, busy_until): the time the staff member is taken.
+    period            tstzrange NOT NULL,
     price_minor       bigint,
     currency          text,
     hold_token_hash   bytea UNIQUE,
@@ -97,6 +98,7 @@ CREATE TABLE bookings (
     confirmed_at      timestamptz,
     cancelled_at      timestamptz,
     CONSTRAINT bookings_times_ordered CHECK (starts_at < ends_at AND ends_at <= busy_until),
+    CONSTRAINT bookings_period_matches CHECK (period = tstzrange(starts_at, busy_until, '[)')),
     CONSTRAINT bookings_kind_fields CHECK (
         (kind = 'appointment' AND service_id IS NOT NULL)
         OR (kind = 'block' AND service_id IS NULL AND status = 'confirmed')
@@ -114,7 +116,7 @@ CREATE INDEX bookings_location_starts_idx ON bookings (location_id, starts_at);
 CREATE INDEX bookings_held_expiry_idx ON bookings (hold_expires_at) WHERE status = 'held';
 
 CREATE TABLE notifications (
-    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id              bigserial PRIMARY KEY,
     booking_id      uuid NOT NULL REFERENCES bookings (id) ON DELETE CASCADE,
     kind            text NOT NULL CHECK (kind IN ('confirmation', 'reminder_24h', 'reminder_2h', 'cancellation')),
     status          text NOT NULL DEFAULT 'pending'

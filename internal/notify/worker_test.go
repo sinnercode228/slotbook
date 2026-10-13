@@ -42,15 +42,13 @@ func newOutboxFixture(t *testing.T, n int) outboxFixture {
 		t.Fatal(err)
 	}
 	rows, err := pool.Query(ctx, `
-		INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until,
+		INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until, period,
 		                      customer_name, customer_phone, manage_token_hash, created_at, confirmed_at)
-		SELECT 'appointment', 'confirmed', $1, $2, $3,
-		       $4::timestamptz + make_interval(hours => g),
-		       $4::timestamptz + make_interval(hours => g, mins => 45),
-		       $4::timestamptz + make_interval(hours => g, mins => 45),
+		SELECT 'appointment', 'confirmed', $1, $2, $3, s.start, s.start + interval '45 minutes',
+		       s.start + interval '45 minutes', tstzrange(s.start, s.start + interval '45 minutes', '[)'),
 		       'Anna', '+7 900 123-45-67', '\x00'::bytea, $5, $5
-		FROM generate_series(0, $6 - 1) AS g
-		ORDER BY g
+		FROM (SELECT $4::timestamptz + make_interval(hours => g) AS start FROM generate_series(0, $6 - 1) AS g) AS s
+		ORDER BY s.start
 		RETURNING id::text`,
 		res.Locations["berlin"], res.Staff["lena"], res.Services["cut"], testNow.Add(72*time.Hour), testNow, n)
 	if err != nil {

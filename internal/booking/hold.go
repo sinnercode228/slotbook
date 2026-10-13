@@ -138,9 +138,9 @@ func (m *Manager) insertHold(ctx context.Context, h newHold) (Booking, error) {
 		}
 		var err error
 		b, err = scanBooking(tx.QueryRow(ctx, `
-			INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until,
+			INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until, period,
 			                      price_minor, currency, hold_token_hash, hold_expires_at, created_at)
-			VALUES ('appointment', 'held', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			VALUES ('appointment', 'held', $1, $2, $3, $4, $5, $6, tstzrange($4, $6, '[)'), $7, $8, $9, $10, $11)
 			RETURNING `+bookingColumns,
 			h.locationID, h.staffID, h.service.ID, h.start, h.end, h.busyUntil,
 			h.service.PriceMinor, h.service.Currency, h.tokenHash, h.expiresAt, h.now))

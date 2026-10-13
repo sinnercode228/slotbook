@@ -2,9 +2,11 @@ package db_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/sinnercode228/slotbook/internal/db"
@@ -46,8 +48,8 @@ func insertStaff(t *testing.T, pool *pgxpool.Pool) (locationID, staffID int64) {
 
 func insertBlock(pool *pgxpool.Pool, locationID, staffID int64, start, end time.Time, status string) error {
 	_, err := pool.Exec(context.Background(), `
-		INSERT INTO bookings (kind, status, location_id, staff_id, starts_at, ends_at, busy_until, created_at)
-		VALUES ('block', $1, $2, $3, $4, $5, $5, $4)`, status, locationID, staffID, start, end)
+		INSERT INTO bookings (kind, status, location_id, staff_id, starts_at, ends_at, busy_until, period, created_at)
+		VALUES ('block', $1, $2, $3, $4, $5, $5, tstzrange($4, $5, '[)'), $4)`, status, locationID, staffID, start, end)
 	return err
 }
 
@@ -84,8 +86,8 @@ func TestExclusionConstraintIgnoresInactiveRows(t *testing.T) {
 	insertHold := func(status string) error {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until,
-			                      hold_expires_at, created_at)
-			VALUES ('appointment', $1, $2, $3, $4, $5, $6, $6, $5, $5)`,
+			                      period, hold_expires_at, created_at)
+			VALUES ('appointment', $1, $2, $3, $4, $5, $6, $6, tstzrange($5, $6, '[)'), $5, $5)`,
 			status, locationID, staffID, serviceID, start, start.Add(time.Hour))
 		return err
 	}
@@ -97,5 +99,19 @@ func TestExclusionConstraintIgnoresInactiveRows(t *testing.T) {
 	}
 	if err := insertHold("held"); !db.IsExclusionViolation(err) {
 		t.Fatalf("second active hold: got %v, want an exclusion violation", err)
+	}
+}
+
+func TestPeriodMustMatchStartAndBusyUntil(t *testing.T) {
+	pool := dbtest.New(t)
+	locationID, staffID := insertStaff(t, pool)
+	start := time.Date(2026, time.October, 20, 7, 0, 0, 0, time.UTC)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO bookings (kind, status, location_id, staff_id, starts_at, ends_at, busy_until, period, created_at)
+		VALUES ('block', 'confirmed', $1, $2, $3, $4, $4, tstzrange($3::timestamptz, $3::timestamptz + interval '1 minute', '[)'), $3)`,
+		locationID, staffID, start, start.Add(time.Hour))
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.ConstraintName != "bookings_period_matches" {
+		t.Fatalf("got %v, want a bookings_period_matches violation", err)
 	}
 }

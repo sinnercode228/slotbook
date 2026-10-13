@@ -145,10 +145,10 @@ func (m *Manager) Reschedule(ctx context.Context, id, manageToken string, newSta
 			return err
 		}
 		moved, err = scanBooking(tx.QueryRow(ctx, `
-			INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until,
+			INSERT INTO bookings (kind, status, location_id, staff_id, service_id, starts_at, ends_at, busy_until, period,
 			                      price_minor, currency, manage_token_hash, customer_name, customer_phone,
 			                      customer_email, telegram_chat_id, rescheduled_from, created_at, confirmed_at)
-			SELECT 'appointment', 'confirmed', location_id, staff_id, service_id, $2, $3, $4,
+			SELECT 'appointment', 'confirmed', location_id, staff_id, service_id, $2, $3, $4, tstzrange($2, $4, '[)'),
 			       price_minor, currency, manage_token_hash, customer_name, customer_phone,
 			       customer_email, telegram_chat_id, id, $5, $5
 			FROM bookings WHERE id = $1
