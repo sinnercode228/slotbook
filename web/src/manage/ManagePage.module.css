@@ -1,0 +1,110 @@
+.page {
+  display: grid;
+  gap: 16px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.card {
+  display: grid;
+  gap: 20px;
+  padding: 20px 16px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+@media (min-width: 600px) {
+  .card {
+    padding: 28px 28px 32px;
+  }
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.title {
+  font-size: var(--text-xl);
+}
+
+.when {
+  display: grid;
+  gap: 2px;
+}
+
+.whenDate {
+  font-size: var(--text-lg);
+  font-weight: 650;
+}
+
+.whenSub {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 18px;
+  margin: 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--border);
+}
+
+.facts dt {
+  color: var(--text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.facts small {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 479px) {
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}
+
+.cancelled .when {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.reschedule {
+  display: grid;
+  gap: 16px;
+}
+
+.rescheduleHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rescheduleTitle {
+  font-size: var(--text-lg);
+}
