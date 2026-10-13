@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AdminPage } from '../admin/AdminPage';
 import { buttonClass } from '../components/buttonClass';
 import { LanguageSwitch } from '../components/LanguageSwitch';
@@ -35,6 +36,11 @@ export function App() {
   const route = useRoute();
   const { t } = useI18n();
   const wide = route.path === '/admin';
+  const screenTitle = wide ? t('admin.title') : t('app.bookVisit');
+
+  useEffect(() => {
+    document.title = `${screenTitle} · ${BRAND_NAME}`;
+  }, [screenTitle]);
 
   return (
     <div className={`${styles.page} ${wide ? styles.wide : ''}`}>
@@ -47,7 +53,7 @@ export function App() {
             </span>
             <span className={styles.brandText}>
               <span className={styles.brandName}>{BRAND_NAME}</span>
-              <span className={styles.brandSub}>{wide ? t('admin.title') : t('app.bookVisit')}</span>
+              <span className={styles.brandSub}>{screenTitle}</span>
             </span>
           </a>
           <LanguageSwitch />
