@@ -3,10 +3,12 @@ package booking_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/sinnercode228/slotbook/internal/booking"
+	"github.com/sinnercode228/slotbook/internal/dbtest"
 )
 
 func TestConfirmTurnsAHoldIntoABooking(t *testing.T) {
@@ -147,5 +149,54 @@ func TestIdempotencyKeysAreForgottenAfterADay(t *testing.T) {
 	// Without the stored result the retry runs again and finds the hold used.
 	if _, _, err := f.manager.Confirm(ctx, req, "key-1"); !errors.Is(err, booking.ErrAlreadyConfirmed) {
 		t.Fatalf("retry after pruning: %v", err)
+	}
+}
+
+func TestConcurrentConfirmsWithOneKeyShareOneResult(t *testing.T) {
+	f := newFixture(t, dbtest.WithMaxConns(12))
+	ctx := context.Background()
+	h := f.hold(t, f.lena(), at(2026, time.October, 14, 10, 0))
+	req := booking.ConfirmRequest{HoldToken: h.Token, Customer: anna}
+
+	const n = 8
+	type outcome struct {
+		c        booking.Confirmation
+		replayed bool
+		err      error
+	}
+	results := make(chan outcome, n)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			c, replayed, err := f.manager.Confirm(ctx, req, "double-click")
+			results <- outcome{c, replayed, err}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	fresh := 0
+	var token string
+	for r := range results {
+		if r.err != nil {
+			t.Fatalf("confirm: %v", r.err)
+		}
+		if !r.replayed {
+			fresh++
+		}
+		if token == "" {
+			token = r.c.ManageToken
+		}
+		if r.c.ManageToken != token {
+			t.Fatal("concurrent confirms returned different manage tokens")
+		}
+	}
+	if fresh != 1 {
+		t.Fatalf("%d confirms ran for real, want exactly 1", fresh)
 	}
 }
