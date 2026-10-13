@@ -275,7 +275,8 @@ describe('manage link', () => {
     const moved = await api.rescheduleBooking(booking.id, manage_token, '2026-10-14T10:15:00+02:00');
     expect(moved).toMatchObject({ status: 'confirmed', start: '2026-10-14T10:15:00+02:00', rescheduled_from: booking.id });
     expect(moved.id).not.toBe(booking.id);
-    expect((await api.getBooking(booking.id, manage_token)).status).toBe('cancelled');
+    expect(moved.rescheduled_to).toBeNull();
+    expect(await api.getBooking(booking.id, manage_token)).toMatchObject({ status: 'cancelled', rescheduled_to: moved.id });
     await expect(api.getBooking(moved.id, manage_token)).resolves.toMatchObject({ customer: anna });
   });
 

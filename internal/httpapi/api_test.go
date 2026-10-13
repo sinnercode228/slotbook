@@ -148,6 +148,7 @@ type bookingView struct {
 	BusyUntil       string `json:"busy_until"`
 	TimeZone        string `json:"time_zone"`
 	RescheduledFrom string `json:"rescheduled_from"`
+	RescheduledTo   string `json:"rescheduled_to"`
 	Price           *struct {
 		AmountMinor int64  `json:"amount_minor"`
 		Currency    string `json:"currency"`
@@ -325,8 +326,8 @@ func TestBookingLifecycle(t *testing.T) {
 		t.Fatalf("rescheduled %+v", moved)
 	}
 	old := decode[bookingView](t, a.do(http.MethodGet, path, nil, "X-Manage-Token", c.ManageToken))
-	if old.Status != "cancelled" {
-		t.Fatalf("old booking is %s", old.Status)
+	if old.Status != "cancelled" || old.RescheduledTo != moved.ID {
+		t.Fatalf("old booking is %s, rescheduled to %q", old.Status, old.RescheduledTo)
 	}
 
 	movedPath := "/v1/bookings/" + moved.ID

@@ -11,10 +11,15 @@ import (
 	"github.com/sinnercode228/slotbook/internal/slots"
 )
 
+// bookingColumns is the select list scanBooking reads. It qualifies id with
+// the table name so that it also works in RETURNING, where the subquery
+// looks up the booking that replaced this one after a reschedule.
 const bookingColumns = `id::text, kind, status, location_id, staff_id, coalesce(service_id, 0), starts_at, ends_at,
 	busy_until, coalesce(price_minor, 0), coalesce(currency, ''), hold_expires_at, customer_name,
 	coalesce(customer_phone, ''), coalesce(customer_email, ''), coalesce(telegram_chat_id, 0), note,
-	coalesce(rescheduled_from::text, ''), created_at, confirmed_at, cancelled_at, manage_token_hash`
+	coalesce(rescheduled_from::text, ''),
+	coalesce((SELECT next.id::text FROM bookings next WHERE next.rescheduled_from = bookings.id), ''),
+	created_at, confirmed_at, cancelled_at, manage_token_hash`
 
 func scanBooking(row pgx.Row) (Booking, error) {
 	var (
@@ -25,7 +30,7 @@ func scanBooking(row pgx.Row) (Booking, error) {
 	)
 	err := row.Scan(&b.ID, &b.Kind, &b.Status, &b.LocationID, &b.StaffID, &b.ServiceID, &b.Start, &b.End,
 		&b.BusyUntil, &b.PriceMinor, &b.Currency, &b.HoldExpiresAt, &name, &phone, &email, &chatID, &b.Note,
-		&b.RescheduledFrom, &b.CreatedAt, &b.ConfirmedAt, &b.CancelledAt, &b.manageTokenHash)
+		&b.RescheduledFrom, &b.RescheduledTo, &b.CreatedAt, &b.ConfirmedAt, &b.CancelledAt, &b.manageTokenHash)
 	if err != nil {
 		return Booking{}, err
 	}

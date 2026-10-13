@@ -184,6 +184,7 @@ Telegram; otherwise they go to the server log.
     "customer": {"name": "Anna", "phone": "+7 900 123-45-67", "email": "anna@example.com"},
     "note": "",
     "rescheduled_from": null,
+    "rescheduled_to": null,
     "created_at": "2026-10-12T10:00:00+02:00",
     "confirmed_at": "2026-10-12T10:02:13+02:00",
     "cancelled_at": null
@@ -217,6 +218,8 @@ token answers `404 not_found`, the same as a missing booking.
   offered slot (the booking's own time does not count as busy). The old
   booking becomes `cancelled`, the new one has a new `id`,
   `rescheduled_from` pointing at the old one, and the same manage token.
+  The old booking's `rescheduled_to` points at the new one, so a client
+  holding the original link can follow it to the current booking.
   Errors: `too_late`, `not_active`, `invalid_slot`, `slot_taken`.
 
 ## Admin

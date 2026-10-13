@@ -79,6 +79,8 @@ export interface Booking {
   customer: Customer | null;
   note: string;
   rescheduled_from: string | null;
+  /** The booking that replaced this one when it was moved. */
+  rescheduled_to: string | null;
   created_at: string;
   confirmed_at: string | null;
   cancelled_at: string | null;

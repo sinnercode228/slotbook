@@ -122,6 +122,7 @@ type bookingView struct {
 	Customer        *customerView  `json:"customer"`
 	Note            string         `json:"note"`
 	RescheduledFrom *string        `json:"rescheduled_from"`
+	RescheduledTo   *string        `json:"rescheduled_to"`
 	CreatedAt       string         `json:"created_at"`
 	ConfirmedAt     *string        `json:"confirmed_at"`
 	CancelledAt     *string        `json:"cancelled_at"`
@@ -144,6 +145,7 @@ func viewBooking(b booking.Booking, zone *time.Location) bookingView {
 		ConfirmedAt:     formatOptional(b.ConfirmedAt, zone),
 		CancelledAt:     formatOptional(b.CancelledAt, zone),
 		RescheduledFrom: optionalString(b.RescheduledFrom),
+		RescheduledTo:   optionalString(b.RescheduledTo),
 	}
 	if b.ServiceID != 0 {
 		v.ServiceID = &b.ServiceID

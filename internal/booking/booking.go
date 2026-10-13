@@ -46,9 +46,11 @@ type Booking struct {
 	Customer        *Customer  `json:"customer,omitempty"`
 	Note            string     `json:"note,omitempty"`
 	RescheduledFrom string     `json:"rescheduled_from,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	ConfirmedAt     *time.Time `json:"confirmed_at,omitempty"`
-	CancelledAt     *time.Time `json:"cancelled_at,omitempty"`
+	// RescheduledTo is the booking that replaced this one, if it was moved.
+	RescheduledTo string     `json:"rescheduled_to,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ConfirmedAt   *time.Time `json:"confirmed_at,omitempty"`
+	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
 
 	manageTokenHash []byte
 }

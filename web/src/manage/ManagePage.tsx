@@ -35,6 +35,13 @@ export function ManagePage({ bookingId, manageToken, notice }: { bookingId: stri
   useEffect(() => {
     if (arrivalNotice) window.history.replaceState(null, '', `#${manageRoute(bookingId, manageToken)}`);
   }, [arrivalNotice, bookingId, manageToken]);
+
+  // A link kept from before a reschedule leads to the cancelled original;
+  // the booking that replaced it carries the same token.
+  const movedTo = booking.data?.rescheduled_to;
+  useEffect(() => {
+    if (movedTo) navigate(manageRoute(movedTo, manageToken), { replace: true });
+  }, [movedTo, manageToken]);
   const locationId = booking.data?.location_id;
   const context = useResource<Context>(locationId === undefined ? null : `context|${locationId}`, async () => {
     const [locations, services, staff] = await Promise.all([
@@ -70,7 +77,7 @@ export function ManagePage({ bookingId, manageToken, notice }: { bookingId: stri
       </div>
     );
   }
-  if (!booking.data || !context.data) {
+  if (!booking.data || !context.data || movedTo) {
     return (
       <div className={styles.page}>
         <SkeletonList rows={3} label={t('common.loading')} />

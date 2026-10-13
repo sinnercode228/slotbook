@@ -104,6 +104,36 @@ func TestRescheduleOntoAPeriodOverlappingItsOwn(t *testing.T) {
 	}
 }
 
+func TestTheOldManageLinkPointsToTheMovedBooking(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	start := at(2026, time.October, 14, 10, 0)
+	c := f.book(t, f.lena(), start)
+	first, err := f.manager.Reschedule(ctx, c.Booking.ID, c.ManageToken, start.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.manager.Reschedule(ctx, first.ID, c.ManageToken, start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A customer who kept the link from the confirmation must be able to
+	// find the booking again rather than see it as cancelled.
+	for _, hop := range []struct{ from, to string }{{c.Booking.ID, first.ID}, {first.ID, second.ID}} {
+		b, err := f.manager.Get(ctx, hop.from, c.ManageToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b.Status != booking.StatusCancelled || b.RescheduledTo != hop.to {
+			t.Errorf("booking %s: status %s, rescheduled to %q, want %q", hop.from, b.Status, b.RescheduledTo, hop.to)
+		}
+	}
+	if b, err := f.manager.Get(ctx, second.ID, c.ManageToken); err != nil || b.RescheduledTo != "" {
+		t.Errorf("current booking: rescheduled to %q, %v", b.RescheduledTo, err)
+	}
+}
+
 func TestRescheduleIntoSomeoneElsesBookingChangesNothing(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()

@@ -567,6 +567,7 @@ export class Engine {
       customer: b.customer ? { ...b.customer } : null,
       note: b.note,
       rescheduled_from: b.rescheduledFrom,
+      rescheduled_to: this.state.bookings.find((next) => next.rescheduledFrom === b.id)?.id ?? null,
       created_at: at(b.createdAt),
       confirmed_at: maybe(b.confirmedAt),
       cancelled_at: maybe(b.cancelledAt),
