@@ -1,0 +1,29 @@
+.switch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.option {
+  min-width: 40px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+.option[aria-pressed='true'] {
+  background: var(--text);
+  color: #ffffff;
+}
+
+.option:hover[aria-pressed='false'] {
+  color: var(--text);
+}
