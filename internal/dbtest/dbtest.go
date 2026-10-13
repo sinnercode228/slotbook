@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"net/url"
 	"os"
 	"testing"
 
@@ -33,17 +34,39 @@ func WithMaxConns(n int32) Option {
 // migrations applied. The schema is dropped when the test ends.
 func New(t testing.TB, opts ...Option) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv(envURL)
-	if url == "" {
-		t.Skip(envURL + " is not set")
-	}
 	o := options{maxConns: 8}
 	for _, opt := range opts {
 		opt(&o)
 	}
+	cfg, err := pgxpool.ParseConfig(EmptySchema(t))
+	if err != nil {
+		t.Fatalf("dbtest: parse url: %v", err)
+	}
+	cfg.MaxConns = o.maxConns
+	ctx := context.Background()
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("dbtest: open pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	if _, err := db.Migrate(ctx, pool); err != nil {
+		t.Fatalf("dbtest: migrate: %v", err)
+	}
+	return pool
+}
+
+// EmptySchema creates a schema that is dropped when the test ends and
+// returns a database URL whose search_path points at it.
+func EmptySchema(t testing.TB) string {
+	t.Helper()
+	raw := os.Getenv(envURL)
+	if raw == "" {
+		t.Skip(envURL + " is not set")
+	}
 	ctx := context.Background()
 
-	admin, err := pgx.Connect(ctx, url)
+	admin, err := pgx.Connect(ctx, raw)
 	if err != nil {
 		t.Fatalf("dbtest: connect: %v", err)
 	}
@@ -74,22 +97,14 @@ func New(t testing.TB, opts ...Option) *pgxpool.Pool {
 		}
 	})
 
-	cfg, err := pgxpool.ParseConfig(url)
+	u, err := url.Parse(raw)
 	if err != nil {
-		t.Fatalf("dbtest: parse url: %v", err)
+		t.Fatalf("dbtest: %s must be a URL: %v", envURL, err)
 	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = schema + ",public"
-	cfg.MaxConns = o.maxConns
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		t.Fatalf("dbtest: open pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if _, err := db.Migrate(ctx, pool); err != nil {
-		t.Fatalf("dbtest: migrate: %v", err)
-	}
-	return pool
+	q := u.Query()
+	q.Set("search_path", schema+",public")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func randomSuffix(t testing.TB) string {
