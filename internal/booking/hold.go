@@ -132,7 +132,7 @@ type newHold struct {
 
 func (m *Manager) insertHold(ctx context.Context, h newHold) (Booking, error) {
 	var b Booking
-	err := pgx.BeginFunc(ctx, m.pool, func(tx pgx.Tx) error {
+	err := inTx(ctx, m.pool, func(tx pgx.Tx) error {
 		if err := expireStaleHolds(ctx, tx, h.staffID, h.start, h.busyUntil, h.now); err != nil {
 			return err
 		}

@@ -152,6 +152,51 @@ func TestRescheduleIntoSomeoneElsesBookingChangesNothing(t *testing.T) {
 	}
 }
 
+// A reschedule inserts its new row the way a hold does, so reschedules onto
+// the same period can deadlock as well (see
+// TestSimultaneousHoldsNeverFailWithADeadlock). A hold released with them
+// would usually commit before they reach their inserts, because a reschedule
+// makes more round trips first, so here the reschedules race each other.
+// After each round the winner moves back to where it was.
+func TestSimultaneousReschedulesNeverFailWithADeadlock(t *testing.T) {
+	const rounds, n = 100, 4
+	f := newRaceFixture(t, n)
+	ctx := context.Background()
+	target := at(2026, time.October, 14, 10, 0)
+	type appointment struct {
+		id, token string
+		home      time.Time
+	}
+	mine := make([]appointment, n)
+	for i := range mine {
+		home := target.Add(time.Duration(i+1) * time.Hour)
+		c := f.book(t, f.lena(), home)
+		mine[i] = appointment{c.Booking.ID, c.ManageToken, home}
+	}
+	for round := range rounds {
+		moved := make([]booking.Booking, n)
+		errs := race(n, func(i int) error {
+			var err error
+			moved[i], err = f.manager.Reschedule(ctx, mine[i].id, mine[i].token, target)
+			return err
+		})
+		f.checkOneWinner(t, round, errs, target, target.Add(time.Hour))
+		for i, a := range mine {
+			if errs[i] != nil {
+				if got := f.status(t, a.id); got != booking.StatusConfirmed {
+					t.Fatalf("round %d: a booking that lost the race is %s", round, got)
+				}
+				continue
+			}
+			back, err := f.manager.Reschedule(ctx, moved[i].ID, a.token, a.home)
+			if err != nil {
+				t.Fatalf("round %d: moving the winner back: %v", round, err)
+			}
+			mine[i].id = back.ID
+		}
+	}
+}
+
 func TestRescheduleChecksTheNewStartAndTheCutoff(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()

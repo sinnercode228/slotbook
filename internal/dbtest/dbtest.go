@@ -7,11 +7,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/url"
 	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/sinnercode228/slotbook/internal/db"
@@ -21,13 +23,22 @@ const envURL = "SLOTBOOK_TEST_DATABASE_URL"
 
 type options struct {
 	maxConns int32
+	settings []setting
 }
+
+type setting struct{ name, value string }
 
 type Option func(*options)
 
 // WithMaxConns raises the pool size for tests that need real concurrency.
 func WithMaxConns(n int32) Option {
 	return func(o *options) { o.maxConns = n }
+}
+
+// WithSetting sets a configuration parameter on every connection of the
+// pool. The test is skipped if the role is not allowed to set it.
+func WithSetting(name, value string) Option {
+	return func(o *options) { o.settings = append(o.settings, setting{name, value}) }
 }
 
 // New returns a pool whose search_path points at a new schema with all
@@ -43,12 +54,29 @@ func New(t testing.TB, opts ...Option) *pgxpool.Pool {
 		t.Fatalf("dbtest: parse url: %v", err)
 	}
 	cfg.MaxConns = o.maxConns
+	if len(o.settings) > 0 {
+		cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+			for _, s := range o.settings {
+				if _, err := conn.Exec(ctx, "SELECT set_config($1, $2, false)", s.name, s.value); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}
 	ctx := context.Background()
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatalf("dbtest: open pool: %v", err)
 	}
 	t.Cleanup(pool.Close)
+	if err := pool.Ping(ctx); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42501" { // insufficient_privilege
+			t.Skipf("dbtest: the role in %s may not change a setting this test needs: %v", envURL, err)
+		}
+		t.Fatalf("dbtest: connect: %v", err)
+	}
 
 	if _, err := db.Migrate(ctx, pool); err != nil {
 		t.Fatalf("dbtest: migrate: %v", err)

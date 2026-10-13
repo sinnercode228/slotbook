@@ -43,7 +43,7 @@ func (m *Manager) CreateBlock(ctx context.Context, req BlockRequest) (Booking, e
 	}
 	now := m.clock.Now()
 	var b Booking
-	err = pgx.BeginFunc(ctx, m.pool, func(tx pgx.Tx) error {
+	err = inTx(ctx, m.pool, func(tx pgx.Tx) error {
 		if err := expireStaleHolds(ctx, tx, member.ID, req.Start, req.End, now); err != nil {
 			return err
 		}

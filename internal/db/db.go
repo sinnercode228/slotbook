@@ -41,11 +41,17 @@ func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
 const (
 	codeUniqueViolation    = "23505"
 	codeExclusionViolation = "23P01"
+	codeDeadlockDetected   = "40P01"
 )
 
 // IsExclusionViolation reports whether err comes from an exclusion
 // constraint, which for bookings means the period is already taken.
 func IsExclusionViolation(err error) bool { return hasCode(err, codeExclusionViolation) }
+
+// IsDeadlock reports whether the deadlock detector aborted the transaction.
+// Two inserts of overlapping periods at the same moment can end this way
+// instead of with an exclusion violation; the transaction can run again.
+func IsDeadlock(err error) bool { return hasCode(err, codeDeadlockDetected) }
 
 func IsUniqueViolation(err error) bool { return hasCode(err, codeUniqueViolation) }
 

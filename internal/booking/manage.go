@@ -123,7 +123,7 @@ func (m *Manager) Reschedule(ctx context.Context, id, manageToken string, newSta
 	end := newStart.Add(svc.Duration)
 	busyUntil := end.Add(svc.Buffer)
 	var moved Booking
-	err = pgx.BeginFunc(ctx, m.pool, func(tx pgx.Tx) error {
+	err = inTx(ctx, m.pool, func(tx pgx.Tx) error {
 		old, err := lockAppointment(ctx, tx, current.ID)
 		if err != nil {
 			return err

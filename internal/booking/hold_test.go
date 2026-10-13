@@ -120,6 +120,27 @@ func TestConcurrentHoldsOnTheSameSlotHaveOneWinner(t *testing.T) {
 	}
 }
 
+// Two transactions that insert the same period at the same moment can each
+// find the other's uncommitted entry in the constraint's index and wait for
+// it; PostgreSQL's deadlock detector then aborts one of them with 40P01. The
+// loser must still get ErrSlotTaken. A round deadlocks only now and then, and
+// hardly ever while the index fits in one page (about the first 40 rounds
+// here), so the test runs many rounds on one pool.
+func TestSimultaneousHoldsNeverFailWithADeadlock(t *testing.T) {
+	const rounds, n = 150, 4
+	f := newRaceFixture(t, n)
+	ctx := context.Background()
+	start := at(2026, time.October, 14, 10, 0)
+	for round := range rounds {
+		errs := race(n, func(int) error {
+			_, err := f.manager.Hold(ctx, booking.HoldRequest{ServiceID: f.haircut(), StaffID: f.lena(), Start: start})
+			return err
+		})
+		f.checkOneWinner(t, round, errs, start, start.Add(time.Hour))
+		f.clearBookings(t)
+	}
+}
+
 func TestExpiredHoldDoesNotBlockANewOne(t *testing.T) {
 	f := newFixture(t)
 	start := at(2026, time.October, 14, 10, 0)

@@ -2,6 +2,8 @@ package booking_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,6 +80,72 @@ func newFixture(t *testing.T, opts ...dbtest.Option) fixture {
 		clock:   clk,
 		manager: booking.NewManager(pool, catalog.NewStore(pool, config.LocationDefaults), clk),
 		ids:     ids,
+	}
+}
+
+// newRaceFixture is newFixture with a connection for each of n goroutines
+// and a short deadlock_timeout, so that PostgreSQL resolves a deadlock
+// between simultaneous inserts in milliseconds instead of a second.
+func newRaceFixture(t *testing.T, n int32) fixture {
+	t.Helper()
+	return newFixture(t, dbtest.WithMaxConns(n), dbtest.WithSetting("deadlock_timeout", "10ms"))
+}
+
+// race runs fn in n goroutines released at the same moment and returns
+// their errors in goroutine order.
+func race(n int, fn func(i int) error) []error {
+	var (
+		wg    sync.WaitGroup
+		ready = make(chan struct{})
+		errs  = make([]error, n)
+	)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-ready
+			errs[i] = fn(i)
+		}()
+	}
+	close(ready)
+	wg.Wait()
+	return errs
+}
+
+// checkOneWinner fails the test unless exactly one of errs is nil, all the
+// others are ErrSlotTaken and Lena has exactly one active row over
+// [start, end).
+func (f fixture) checkOneWinner(t *testing.T, round int, errs []error, start, end time.Time) {
+	t.Helper()
+	won := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			won++
+		case !errors.Is(err, booking.ErrSlotTaken):
+			t.Fatalf("round %d: got %v, want ErrSlotTaken", round, err)
+		}
+	}
+	if won != 1 {
+		t.Fatalf("round %d: %d of %d calls succeeded, want 1", round, won, len(errs))
+	}
+	var active int
+	err := f.pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM bookings
+		WHERE staff_id = $1 AND status IN ('held', 'confirmed') AND period && tstzrange($2, $3, '[)')`,
+		f.lena(), start, end).Scan(&active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active != 1 {
+		t.Fatalf("round %d: %d active rows over the slot, want 1", round, active)
+	}
+}
+
+func (f fixture) clearBookings(t *testing.T) {
+	t.Helper()
+	if _, err := f.pool.Exec(context.Background(), `DELETE FROM bookings`); err != nil {
+		t.Fatal(err)
 	}
 }
 

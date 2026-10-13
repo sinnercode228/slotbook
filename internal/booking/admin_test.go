@@ -44,6 +44,29 @@ func TestBlocksShareTheOverlapGuarantee(t *testing.T) {
 	}
 }
 
+// A block goes through the same constraint as a hold, so it can deadlock
+// with a simultaneous hold or block on the same period (see
+// TestSimultaneousHoldsNeverFailWithADeadlock).
+func TestSimultaneousBlocksAndHoldsNeverFailWithADeadlock(t *testing.T) {
+	const rounds, n = 200, 4
+	f := newRaceFixture(t, n)
+	ctx := context.Background()
+	start := at(2026, time.October, 14, 10, 0)
+	for round := range rounds {
+		errs := race(n, func(i int) error {
+			var err error
+			if i%2 == 0 {
+				_, err = f.manager.CreateBlock(ctx, booking.BlockRequest{StaffID: f.lena(), Start: start, End: start.Add(time.Hour)})
+			} else {
+				_, err = f.manager.Hold(ctx, booking.HoldRequest{ServiceID: f.haircut(), StaffID: f.lena(), Start: start})
+			}
+			return err
+		})
+		f.checkOneWinner(t, round, errs, start, start.Add(time.Hour))
+		f.clearBookings(t)
+	}
+}
+
 func TestCreateBlockValidatesInput(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
