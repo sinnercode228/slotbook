@@ -85,7 +85,7 @@ func VoidPending(ctx context.Context, q db.Querier, bookingID string) error {
 	return nil
 }
 
-// Notification is an outbox row as shown to admins.
+// Notification is an outbox row as shown to admins. Times are in UTC.
 type Notification struct {
 	ID            int64      `json:"id"`
 	BookingID     string     `json:"booking_id"`
@@ -133,7 +133,15 @@ func List(ctx context.Context, q db.Querier, f Filter) ([]Notification, error) {
 		var n Notification
 		err := row.Scan(&n.ID, &n.BookingID, &n.Kind, &n.Status, &n.SendAt, &n.NextAttemptAt, &n.Attempts,
 			&n.LastError, &n.CreatedAt, &n.SentAt)
-		return n, err
+		if err != nil {
+			return Notification{}, err
+		}
+		n.SendAt, n.NextAttemptAt, n.CreatedAt = n.SendAt.UTC(), n.NextAttemptAt.UTC(), n.CreatedAt.UTC()
+		if n.SentAt != nil {
+			sent := n.SentAt.UTC()
+			n.SentAt = &sent
+		}
+		return n, nil
 	})
 }
 

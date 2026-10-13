@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -119,6 +120,12 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	}
 	if cfg.Dev {
 		log.Warn("SLOTBOOK_DEV is set: weak admin tokens are accepted")
+	}
+	if cfg.StaticDir != "" {
+		if _, err := os.Stat(filepath.Join(cfg.StaticDir, "index.html")); err != nil {
+			log.Warn("static directory has no index.html, serving the API only", "dir", cfg.StaticDir)
+			cfg.StaticDir = ""
+		}
 	}
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
