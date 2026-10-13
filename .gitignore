@@ -1,0 +1,18 @@
+# Go
+/bin/
+/slotbook
+*.test
+*.out
+coverage.*
+
+# Local config
+.env
+
+# Web
+node_modules/
+web/dist/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
