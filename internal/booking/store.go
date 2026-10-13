@@ -81,7 +81,8 @@ func busyIntervals(ctx context.Context, q db.Querier, staffID int64, from, to, n
 	})
 }
 
-func validUUID(s string) bool {
+// ValidID reports whether s looks like a booking id (a UUID in text form).
+func ValidID(s string) bool {
 	if len(s) != 36 {
 		return false
 	}

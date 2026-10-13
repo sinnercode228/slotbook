@@ -64,7 +64,7 @@ func (m *Manager) CreateBlock(ctx context.Context, req BlockRequest) (Booking, e
 }
 
 func (m *Manager) DeleteBlock(ctx context.Context, id string) error {
-	if !validUUID(id) {
+	if !ValidID(id) {
 		return ErrNotFound
 	}
 	tag, err := m.pool.Exec(ctx, `DELETE FROM bookings WHERE id = $1 AND kind = 'block'`, id)

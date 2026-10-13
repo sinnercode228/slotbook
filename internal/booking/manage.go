@@ -16,7 +16,7 @@ import (
 // Get returns an appointment to the holder of its manage token. A wrong
 // token looks exactly like a missing booking.
 func (m *Manager) Get(ctx context.Context, id, manageToken string) (Booking, error) {
-	if !validUUID(id) || manageToken == "" {
+	if !ValidID(id) || manageToken == "" {
 		return Booking{}, ErrNotFound
 	}
 	b, err := scanBooking(m.pool.QueryRow(ctx,
@@ -58,7 +58,7 @@ func (m *Manager) AdminCancel(ctx context.Context, id string) (Booking, error) {
 }
 
 func (m *Manager) cancel(ctx context.Context, id string, allowed func(Booking, time.Time) error) (Booking, error) {
-	if !validUUID(id) {
+	if !ValidID(id) {
 		return Booking{}, ErrNotFound
 	}
 	now := m.clock.Now()
