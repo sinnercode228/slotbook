@@ -1,15 +1,14 @@
 # syntax=docker/dockerfile:1
 
-# Web widget. It is optional: without web/package.json this stage produces an
-# empty directory and the image serves the API only. With it, "npm run build"
-# must write the static site to web/dist.
+# Web widget, built for the http API: it calls /v1 on the origin that serves
+# it. Dependencies are installed before the sources are copied so that the
+# layer survives source changes.
 FROM node:22-alpine AS web
-WORKDIR /src
-COPY . .
-RUN mkdir -p /out \
- && if [ -f web/package.json ]; then \
-      cd web && npm ci && npm run build && cp -r dist/. /out/; \
-    fi
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web ./
+RUN npm run build
 
 FROM golang:1.24-alpine AS build
 WORKDIR /src
@@ -22,7 +21,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/slotbook ./cmd/slo
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/slotbook /app/slotbook
-COPY --from=web /out /app/web
+COPY --from=web /src/web/dist /app/web
 COPY seed /app/seed
 ENV SLOTBOOK_ADDR=:8080 \
     SLOTBOOK_STATIC_DIR=/app/web
