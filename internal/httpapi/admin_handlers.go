@@ -3,7 +3,6 @@ package httpapi
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/sinnercode228/slotbook/internal/booking"
 	"github.com/sinnercode228/slotbook/internal/notify"
@@ -58,8 +57,8 @@ func (s *server) adminCancelBooking(w http.ResponseWriter, r *http.Request) {
 
 type blockRequest struct {
 	StaffID int64     `json:"staff_id"`
-	Start   time.Time `json:"start"`
-	End     time.Time `json:"end"`
+	Start   timestamp `json:"start"`
+	End     timestamp `json:"end"`
 	Note    string    `json:"note"`
 }
 
@@ -73,7 +72,7 @@ func (s *server) adminCreateBlock(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, badRequest("staff_id, start and end are required"))
 		return
 	}
-	b, err := s.Bookings.CreateBlock(r.Context(), booking.BlockRequest{StaffID: req.StaffID, Start: req.Start, End: req.End, Note: req.Note})
+	b, err := s.Bookings.CreateBlock(r.Context(), booking.BlockRequest{StaffID: req.StaffID, Start: req.Start.Time, End: req.End.Time, Note: req.Note})
 	if err != nil {
 		s.fail(w, r, err)
 		return

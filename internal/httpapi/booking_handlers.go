@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/sinnercode228/slotbook/internal/booking"
 )
@@ -22,7 +21,7 @@ func (s *server) render(w http.ResponseWriter, r *http.Request, status int, b bo
 type holdRequest struct {
 	ServiceID int64     `json:"service_id"`
 	StaffID   *int64    `json:"staff_id"`
-	Start     time.Time `json:"start"`
+	Start     timestamp `json:"start"`
 }
 
 type holdResponse struct {
@@ -41,7 +40,7 @@ func (s *server) createHold(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, badRequest("service_id and start are required"))
 		return
 	}
-	hr := booking.HoldRequest{ServiceID: req.ServiceID, Start: req.Start}
+	hr := booking.HoldRequest{ServiceID: req.ServiceID, Start: req.Start.Time}
 	if req.StaffID != nil {
 		hr.StaffID = *req.StaffID
 	}
@@ -108,7 +107,7 @@ func (s *server) cancelBooking(w http.ResponseWriter, r *http.Request) {
 }
 
 type rescheduleRequest struct {
-	Start time.Time `json:"start"`
+	Start timestamp `json:"start"`
 }
 
 func (s *server) rescheduleBooking(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +120,7 @@ func (s *server) rescheduleBooking(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, badRequest("start is required"))
 		return
 	}
-	b, err := s.Bookings.Reschedule(r.Context(), r.PathValue("bookingID"), r.Header.Get(manageTokenHeader), req.Start)
+	b, err := s.Bookings.Reschedule(r.Context(), r.PathValue("bookingID"), r.Header.Get(manageTokenHeader), req.Start.Time)
 	if err != nil {
 		s.fail(w, r, err)
 		return
