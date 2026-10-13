@@ -60,6 +60,8 @@ The same constraint covers every other path that puts time on a calendar:
 
 The demo has no PostgreSQL, so [`web/src/mock`](web/src/mock/engine.ts) runs a TypeScript port of these rules and keeps its state in IndexedDB. Every API call is one `readwrite` transaction, and the browser runs those one at a time across tabs, which is why the two-tab race above ends the same way as on the server. localStorage would not do: in Chromium a write in one tab reaches the others asynchronously, even under a Web Lock ([`storage.ts`](web/src/mock/storage.ts#L52-L59)).
 
+Write-up on why the constraint decides and not a check in Go, what the second insert waits for, and when a loser gets `500` instead of `409`: [Two tabs, one slot: letting PostgreSQL refuse the second booking](https://github.com/sinnercode228/sinnercode228/blob/main/notes/slotbook-exclusion-constraint.md).
+
 ## Holds: ten minutes, then the slot is free again
 
 Picking a time creates a row with `status = 'held'` and `hold_expires_at` ten minutes ahead (`hold_ttl_seconds` per location; the defaults are in [`config.go`](internal/config/config.go#L24-L30)). The client gets a 32-byte random hold token, and the table stores only its SHA-256 hash.
@@ -99,6 +101,8 @@ There are 23 vectors. [`golden_test.go`](internal/slots/golden_test.go) runs eac
 </p>
 
 The demo with the browser in Europe/Moscow, booking Lena H. in Berlin. On Friday 23 October 09:00 in Berlin is 10:00 in Moscow; after Berlin's clocks go back, on Monday 26 October, the same 09:00 is 11:00. Lena's first slot is 09:00 Berlin time on both days.
+
+Write-up on how the generator walks dates, how a wall time is resolved and what the vectors pin in each zone: [Berlin on 29 March: booking slots across a DST change without adding 24 hours](https://github.com/sinnercode228/sinnercode228/blob/main/notes/slotbook-dst-slots.md).
 
 ## Reminders through the outbox
 
