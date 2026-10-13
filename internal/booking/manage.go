@@ -36,14 +36,21 @@ func (m *Manager) Get(ctx context.Context, id, manageToken string) (Booking, err
 // Cancel cancels a confirmed appointment for its customer, up to the
 // location's cancellation cutoff before the start.
 func (m *Manager) Cancel(ctx context.Context, id, manageToken string) (Booking, error) {
+	current, err := m.Get(ctx, id, manageToken)
+	if err != nil {
+		return Booking{}, err
+	}
+	// Read the cutoff before the transaction so that it never waits for a
+	// second pooled connection while holding the row lock.
+	loc, err := m.catalog.Location(ctx, current.LocationID)
+	if err != nil {
+		return Booking{}, err
+	}
 	return m.cancel(ctx, id, func(b Booking, now time.Time) error {
-		if !token.Matches(manageToken, b.manageTokenHash) {
-			return ErrNotFound
-		}
 		if b.Status != StatusConfirmed {
 			return ErrNotActive
 		}
-		return m.checkCutoff(ctx, b, now)
+		return checkCutoff(b, loc, now)
 	})
 }
 
@@ -82,11 +89,7 @@ func (m *Manager) cancel(ctx context.Context, id string, allowed func(Booking, t
 	return out, err
 }
 
-func (m *Manager) checkCutoff(ctx context.Context, b Booking, now time.Time) error {
-	loc, err := m.catalog.Location(ctx, b.LocationID)
-	if err != nil {
-		return err
-	}
+func checkCutoff(b Booking, loc catalog.Location, now time.Time) error {
 	if now.After(b.Start.Add(-loc.Settings.CancelCutoff)) {
 		return ErrTooLate
 	}
@@ -105,12 +108,12 @@ func (m *Manager) Reschedule(ctx context.Context, id, manageToken string, newSta
 	if current.Status != StatusConfirmed {
 		return Booking{}, ErrNotActive
 	}
-	now := m.clock.Now()
-	if err := m.checkCutoff(ctx, current, now); err != nil {
-		return Booking{}, err
-	}
 	svc, loc, err := m.serviceAndLocation(ctx, current.ServiceID)
 	if err != nil {
+		return Booking{}, err
+	}
+	now := m.clock.Now()
+	if err := checkCutoff(current, loc, now); err != nil {
 		return Booking{}, err
 	}
 	if err := m.checkStart(ctx, loc, svc, current.StaffID, newStart, now); err != nil {
