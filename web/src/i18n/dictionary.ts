@@ -13,7 +13,6 @@ const en = {
   'common.back': 'Back',
   'common.retry': 'Try again',
   'common.loading': 'Loading…',
-  'common.change': 'Change',
   'common.close': 'Close',
   'common.minutes': '{n} min',
   'common.optional': 'optional',
@@ -26,8 +25,6 @@ const en = {
   'step.staff': 'Choose a specialist',
   'step.time': 'Choose a time',
   'step.details': 'Your details',
-
-  'location.localTime': 'Local time {time}',
   'location.empty': 'No salons take online bookings yet.',
   'service.empty': 'This salon has no services to book online.',
   'staff.any': 'Any available specialist',
@@ -42,7 +39,6 @@ const en = {
   'slots.evening': 'Evening',
   'slots.noneThisWeek': 'No free times this week.',
   'slots.showNextWeek': 'Show next week',
-  'slots.noneThisDay': 'No free times on this day.',
   'slots.dayFull': 'no free times',
   'slots.zoneNote': 'Times are shown in {zone}, the salon’s local time.',
   'slots.visitorZoneNote': 'Your device is on {zone}. Your own time is shown under each slot.',
@@ -178,7 +174,6 @@ const en = {
   'demo.someoneElseDone': 'Someone else just booked {time}. Pick it to see what happens.',
   'demo.someoneElseNone': 'Open the time step first: the slot is taken from the list you see.',
   'demo.reset': 'Reset',
-  'demo.resetDone': 'The demo starts over with fresh data.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -196,7 +191,6 @@ const ru: Dictionary = {
   'common.back': 'Назад',
   'common.retry': 'Повторить',
   'common.loading': 'Загрузка…',
-  'common.change': 'Изменить',
   'common.close': 'Закрыть',
   'common.minutes': '{n} мин',
   'common.optional': 'необязательно',
@@ -209,8 +203,6 @@ const ru: Dictionary = {
   'step.staff': 'Выберите мастера',
   'step.time': 'Выберите время',
   'step.details': 'Ваши данные',
-
-  'location.localTime': 'Местное время {time}',
   'location.empty': 'Пока ни один салон не принимает онлайн-запись.',
   'service.empty': 'В этом салоне нет услуг для онлайн-записи.',
   'staff.any': 'Любой свободный мастер',
@@ -225,7 +217,6 @@ const ru: Dictionary = {
   'slots.evening': 'Вечер',
   'slots.noneThisWeek': 'На этой неделе свободного времени нет.',
   'slots.showNextWeek': 'Показать следующую неделю',
-  'slots.noneThisDay': 'В этот день свободного времени нет.',
   'slots.dayFull': 'нет свободного времени',
   'slots.zoneNote': 'Время указано по часовому поясу салона: {zone}.',
   'slots.visitorZoneNote': 'На вашем устройстве другой пояс ({zone}). Ваше время указано под каждым слотом.',
@@ -361,7 +352,6 @@ const ru: Dictionary = {
   'demo.someoneElseDone': 'Другой клиент только что занял {time}. Выберите это время и посмотрите, что будет.',
   'demo.someoneElseNone': 'Сначала откройте шаг выбора времени: слот берётся из списка на экране.',
   'demo.reset': 'Сбросить',
-  'demo.resetDone': 'Демо начато заново со свежими данными.',
 };
 
 export const dictionaries = { en, ru } as const;
