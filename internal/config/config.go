@@ -212,6 +212,10 @@ func prefixList(getenv func(string) string, key string) ([]netip.Prefix, error) 
 			a = a.WithZone("").Unmap()
 			p = netip.PrefixFrom(a, a.BitLen())
 		}
+		// Peers are compared in IPv4 form, which a mapped prefix never contains.
+		if p.Addr().Is4In6() && p.Bits() >= 96 {
+			p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+		}
 		out = append(out, p.Masked())
 	}
 	return out, nil

@@ -77,6 +77,25 @@ func TestLoadReadsEverything(t *testing.T) {
 	}
 }
 
+func TestTrustedProxiesInIPv4MappedForm(t *testing.T) {
+	cfg, err := Load(env(map[string]string{
+		"SLOTBOOK_DATABASE_URL":    "postgres://x",
+		"SLOTBOOK_TRUSTED_PROXIES": "::ffff:10.0.0.0/104, ::ffff:192.0.2.10/128, ::ffff:198.51.100.7",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Peers are compared in IPv4 form, which a mapped prefix never contains.
+	want := []netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("192.0.2.10/32"),
+		netip.MustParsePrefix("198.51.100.7/32"),
+	}
+	if !slices.Equal(cfg.TrustedProxies, want) {
+		t.Fatalf("trusted proxies %v, want %v", cfg.TrustedProxies, want)
+	}
+}
+
 func TestHoldRateFormats(t *testing.T) {
 	cases := map[string]ratelimit.Limit{
 		"10/min":    {Count: 10, Per: time.Minute, Burst: 10},
