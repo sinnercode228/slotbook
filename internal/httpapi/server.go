@@ -70,6 +70,7 @@ func (s *server) routes() {
 		limitHolds = limitByClient(ratelimit.New(s.HoldLimit, s.Clock), s.TrustedProxies)
 	}
 	m.Handle("POST /v1/holds", limitHolds(http.HandlerFunc(s.createHold)))
+	m.HandleFunc("DELETE /v1/holds/{holdID}", s.releaseHold)
 	m.HandleFunc("POST /v1/bookings", s.confirmHold)
 	m.HandleFunc("GET /v1/bookings/{bookingID}", s.getBooking)
 	m.HandleFunc("POST /v1/bookings/{bookingID}/cancel", s.cancelBooking)

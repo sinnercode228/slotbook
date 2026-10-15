@@ -217,6 +217,64 @@ describe('confirming a hold', () => {
   });
 });
 
+describe('releasing a hold', () => {
+  it('frees the period at once and drops the hold from the day view', async () => {
+    const hold = await api.createHold({ serviceId: HAIRCUT, staffId: LENA, start: '2026-10-14T10:00:00+02:00' });
+    expect(await slotsOn('2026-10-14')).not.toContain('10:15');
+
+    await api.releaseHold(hold.booking.id, hold.hold_token);
+    expect(await slotsOn('2026-10-14')).toEqual(expect.arrayContaining(['10:00', '10:15']));
+    const day = await api.admin('t').listBookings(BERLIN, '2026-10-14');
+    expect(day.bookings.map((b) => b.id)).not.toContain(hold.booking.id);
+    const next = await api.createHold({ serviceId: HAIRCUT, staffId: LENA, start: '2026-10-14T10:15:00+02:00' });
+    expect(next.booking.status).toBe('held');
+  });
+
+  it('succeeds again for a hold that is already released', async () => {
+    const hold = await api.createHold({ serviceId: HAIRCUT, staffId: LENA, start: '2026-10-14T10:00:00+02:00' });
+    await api.releaseHold(hold.booking.id, hold.hold_token);
+    await expect(api.releaseHold(hold.booking.id, hold.hold_token)).resolves.toBeUndefined();
+    minutes(60);
+    await expect(api.releaseHold(hold.booking.id, hold.hold_token)).resolves.toBeUndefined();
+  });
+
+  it('needs the hold\'s own token and answers 404 like a missing hold otherwise', async () => {
+    const hold = await api.createHold({ serviceId: HAIRCUT, staffId: LENA, start: '2026-10-14T10:00:00+02:00' });
+    const other = await api.createHold({ serviceId: HAIRCUT, staffId: JONAS, start: '2026-10-14T10:00:00+02:00' });
+    for (const [id, token] of [
+      [hold.booking.id, 'not-the-token'],
+      [hold.booking.id, other.hold_token],
+      ['no-such-hold', hold.hold_token],
+    ] as const) {
+      const err = await apiError(api.releaseHold(id, token));
+      expect([err.status, err.code]).toEqual([404, 'hold_not_found']);
+    }
+    const empty = await apiError(api.releaseHold(hold.booking.id, ''));
+    expect([empty.status, empty.code, empty.message]).toEqual([422, 'validation_failed', 'hold_token: is required']);
+    expect(await slotsOn('2026-10-14')).not.toContain('10:00');
+  });
+
+  it('refuses a confirmed or expired hold with 409 and leaves it as it was', async () => {
+    const hold = await api.createHold({ serviceId: HAIRCUT, staffId: LENA, start: '2026-10-14T10:00:00+02:00' });
+    const { booking, manage_token } = await api.confirmHold(hold.hold_token, anna, 'k');
+    const confirmed = await apiError(api.releaseHold(hold.booking.id, hold.hold_token));
+    expect([confirmed.status, confirmed.code]).toEqual([409, 'already_confirmed']);
+    expect((await api.getBooking(booking.id, manage_token)).status).toBe('confirmed');
+
+    const lapsed = await api.createHold({ serviceId: HAIRCUT, staffId: JONAS, start: '2026-10-14T10:00:00+02:00' });
+    minutes(10);
+    const expired = await apiError(api.releaseHold(lapsed.booking.id, lapsed.hold_token));
+    expect([expired.status, expired.code]).toEqual([409, 'hold_expired']);
+  });
+
+  it('answers 410 to a confirm of a released hold', async () => {
+    const hold = await api.createHold({ serviceId: HAIRCUT, staffId: LENA, start: '2026-10-14T10:00:00+02:00' });
+    await api.releaseHold(hold.booking.id, hold.hold_token);
+    const err = await apiError(api.confirmHold(hold.hold_token, anna, 'k'));
+    expect([err.status, err.code]).toEqual([410, 'hold_expired']);
+  });
+});
+
 describe('notification outbox', () => {
   it('queues the confirmation and the reminders that are still ahead, and delivers them when due', async () => {
     const { booking } = await book('2026-10-13T09:00:00+02:00');

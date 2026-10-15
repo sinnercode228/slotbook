@@ -22,7 +22,7 @@ interface Context {
 type Mode = 'view' | 'confirmCancel' | 'reschedule';
 type Flash = { tone: 'success' | 'warning' | 'danger'; text: string } | null;
 
-const STATUS_TONE = { confirmed: 'accent', held: 'warning', cancelled: 'danger', expired: undefined } as const;
+const STATUS_TONE = { confirmed: 'accent', held: 'warning', cancelled: 'danger', expired: undefined, released: undefined } as const;
 
 export function ManagePage({ bookingId, manageToken, notice }: { bookingId: string; manageToken: string; notice?: string | null }) {
   const api = useApi();

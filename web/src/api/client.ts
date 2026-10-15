@@ -60,6 +60,8 @@ export interface BookingApi {
   listStaff(locationId: number, serviceId?: number): Promise<Staff[]>;
   listSlots(query: SlotQuery): Promise<Slots>;
   createHold(req: HoldRequest): Promise<Hold>;
+  /** Gives a hold back so that its time is free at once. Releasing it again also succeeds. */
+  releaseHold(bookingId: string, holdToken: string): Promise<void>;
   /** Retrying with the same idempotency key is safe and returns the first result. */
   confirmHold(holdToken: string, customer: Customer, idempotencyKey: string): Promise<Confirmation>;
   getBooking(bookingId: string, manageToken: string): Promise<Booking>;

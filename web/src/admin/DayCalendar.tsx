@@ -41,7 +41,7 @@ function eventClass(b: Booking): string {
 /** One column per specialist, bookings placed by their local wall-clock time. */
 export function DayCalendar({ date, zone, staff, bookings, services, showCancelled, now, onSelect }: DayCalendarProps) {
   const { t, locale } = useI18n();
-  const shown = bookings.filter((b) => showCancelled || (b.status !== 'cancelled' && b.status !== 'expired'));
+  const shown = bookings.filter((b) => showCancelled || b.status === 'held' || b.status === 'confirmed');
 
   let [fromHour, toHour] = DEFAULT_HOURS;
   for (const b of shown) {
@@ -100,7 +100,7 @@ export function DayCalendar({ date, zone, staff, bookings, services, showCancell
                       height: boxHeight,
                       ...(cancelled ? { left: '50%', zIndex: 0 } : {}),
                     }}
-                    aria-label={`${time}, ${title}${sub ? `, ${sub}` : ''}, ${t(`admin.legend.${b.kind === 'block' ? 'block' : b.status === 'expired' ? 'cancelled' : b.status}`)}`}
+                    aria-label={`${time}, ${title}${sub ? `, ${sub}` : ''}, ${t(`admin.legend.${b.kind === 'block' ? 'block' : b.status === 'held' || b.status === 'confirmed' ? b.status : 'cancelled'}`)}`}
                     onClick={() => onSelect(b)}
                   >
                     <span className={styles.eventBody}>

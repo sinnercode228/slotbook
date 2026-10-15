@@ -54,7 +54,7 @@ export interface Slots {
 }
 
 export type BookingKind = 'appointment' | 'block';
-export type BookingStatus = 'held' | 'confirmed' | 'cancelled' | 'expired';
+export type BookingStatus = 'held' | 'confirmed' | 'cancelled' | 'expired' | 'released';
 
 export interface Customer {
   name: string;

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/sinnercode228/slotbook/internal/booking"
@@ -86,6 +87,30 @@ func (s *server) confirmHold(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Idempotent-Replayed", "true")
 	}
 	writeJSON(w, http.StatusCreated, confirmationResponse{Booking: viewBooking(c.Booking, loc.Zone), ManageToken: c.ManageToken})
+}
+
+type releaseRequest struct {
+	HoldToken string `json:"hold_token"`
+}
+
+func (s *server) releaseHold(w http.ResponseWriter, r *http.Request) {
+	var req releaseRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	err := s.Bookings.Release(r.Context(), r.PathValue("holdID"), req.HoldToken)
+	if errors.Is(err, booking.ErrHoldExpired) {
+		// A hold that ran out can no more be released than a confirmed one,
+		// so both are conflicts here; confirm reports the expiry as 410.
+		writeError(w, http.StatusConflict, "hold_expired", err.Error())
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) getBooking(w http.ResponseWriter, r *http.Request) {
