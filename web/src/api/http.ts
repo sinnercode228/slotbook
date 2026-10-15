@@ -18,6 +18,8 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'DELETE';
   body?: unknown;
   headers?: Record<string, string>;
+  /** Lets the request finish even if the page is closed meanwhile. */
+  keepalive?: boolean;
 }
 
 function query(params: Record<string, string | number | null | undefined>): string {
@@ -48,8 +50,9 @@ async function readError(res: Response): Promise<ApiError> {
 export function createHttpApi(baseUrl = '', fetchImpl: FetchLike = (input, init) => fetch(input, init)): BookingApi {
   const base = baseUrl.replace(/\/+$/, '');
 
-  async function request<T>(path: string, { method = 'GET', body, headers = {} }: RequestOptions = {}): Promise<T> {
+  async function request<T>(path: string, { method = 'GET', body, headers = {}, keepalive }: RequestOptions = {}): Promise<T> {
     const init: RequestInit = { method, headers: { Accept: 'application/json', ...headers } };
+    if (keepalive) init.keepalive = true;
     if (body !== undefined) {
       init.body = JSON.stringify(body);
       init.headers = { ...init.headers, 'Content-Type': 'application/json' };
@@ -112,6 +115,12 @@ export function createHttpApi(baseUrl = '', fetchImpl: FetchLike = (input, init)
       request<Hold>('/v1/holds', {
         method: 'POST',
         body: { service_id: req.serviceId, staff_id: req.staffId, start: req.start },
+      }),
+    releaseHold: (bookingId, holdToken) =>
+      request<void>(`/v1/holds/${encodeURIComponent(bookingId)}`, {
+        method: 'DELETE',
+        body: { hold_token: holdToken },
+        keepalive: true,
       }),
     confirmHold: (holdToken, customer, idempotencyKey) =>
       request<Confirmation>('/v1/bookings', {

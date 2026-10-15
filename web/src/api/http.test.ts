@@ -86,6 +86,14 @@ describe('http api client', () => {
     });
   });
 
+  it('releases a hold with DELETE and the token in the body, kept alive past an unload', async () => {
+    const { calls, fetchImpl } = recordingFetch(() => new Response(null, { status: 204 }));
+    await expect(createHttpApi('', fetchImpl).releaseHold('b-1', 'hold-1')).resolves.toBeUndefined();
+    expect(calls[0]!.url).toBe('/v1/holds/b-1');
+    expect(calls[0]!.init).toMatchObject({ method: 'DELETE', keepalive: true });
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ hold_token: 'hold-1' });
+  });
+
   it('accepts 204 without a body', async () => {
     const { fetchImpl } = recordingFetch(() => new Response(null, { status: 204 }));
     await expect(createHttpApi('', fetchImpl).admin('t').deleteBlock('b-1')).resolves.toBeUndefined();

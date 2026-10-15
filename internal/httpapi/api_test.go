@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -363,6 +364,56 @@ func TestConfirmErrorsAndIdempotency(t *testing.T) {
 
 	bad := map[string]any{"hold_token": expired.HoldToken, "customer": map[string]any{"name": "Anna", "phone": "call me"}}
 	expectError(t, a.do(http.MethodPost, "/v1/bookings", bad), http.StatusUnprocessableEntity, "validation_failed")
+}
+
+func TestReleaseHold(t *testing.T) {
+	a := newAPI(t, "")
+	ten := "2026-10-14T10:00:00+02:00"
+	h := a.hold("cut", "lena", ten)
+	path := "/v1/holds/" + h.Booking.ID
+	token := map[string]any{"hold_token": h.HoldToken}
+
+	expectError(t, a.do(http.MethodDelete, path, map[string]any{"hold_token": "nope"}), http.StatusNotFound, "hold_not_found")
+	expectError(t, a.do(http.MethodDelete, "/v1/holds/7c9e6679-7425-40de-944b-e07fc1f90ae7", token), http.StatusNotFound, "hold_not_found")
+	expectError(t, a.do(http.MethodDelete, "/v1/holds/not-a-uuid", token), http.StatusNotFound, "hold_not_found")
+	expectError(t, a.do(http.MethodDelete, path, nil), http.StatusBadRequest, "bad_request")
+	expectError(t, a.do(http.MethodDelete, path, map[string]any{}), http.StatusUnprocessableEntity, "validation_failed")
+
+	for i := range 2 {
+		rec := a.do(http.MethodDelete, path, token)
+		expectStatus(t, rec, http.StatusNoContent)
+		if rec.Body.Len() != 0 {
+			t.Fatalf("release %d answered with a body: %s", i+1, rec.Body.String())
+		}
+	}
+
+	// The time and the ones overlapping it are offered again at once.
+	rec := a.do(http.MethodGet, "/v1/locations/"+strconv.FormatInt(a.ids.Locations["berlin"], 10)+"/slots?service_id="+
+		strconv.FormatInt(a.ids.Services["cut"], 10)+"&staff_id="+strconv.FormatInt(a.ids.Staff["lena"], 10)+"&from=2026-10-14&to=2026-10-14", nil)
+	expectStatus(t, rec, http.StatusOK)
+	offered := decode[struct {
+		Days []struct {
+			Slots []string `json:"slots"`
+		} `json:"days"`
+	}](t, rec).Days[0].Slots
+	if !slices.Contains(offered, ten) || !slices.Contains(offered, "2026-10-14T10:15:00+02:00") {
+		t.Fatalf("slots after the release %v", offered)
+	}
+	expectError(t, a.do(http.MethodPost, "/v1/bookings", map[string]any{"hold_token": h.HoldToken, "customer": customer}), http.StatusGone, "hold_expired")
+	again := a.hold("cut", "lena", ten)
+
+	a.confirm(again.HoldToken)
+	expectError(t, a.do(http.MethodDelete, "/v1/holds/"+again.Booking.ID, map[string]any{"hold_token": again.HoldToken}), http.StatusConflict, "already_confirmed")
+
+	lapsed := a.hold("cut", "jonas", ten)
+	a.clock.Advance(10 * time.Minute)
+	expectError(t, a.do(http.MethodDelete, "/v1/holds/"+lapsed.Booking.ID, map[string]any{"hold_token": lapsed.HoldToken}), http.StatusConflict, "hold_expired")
+
+	rec = a.do(http.MethodGet, path, nil)
+	expectError(t, rec, http.StatusMethodNotAllowed, "method_not_allowed")
+	if rec.Header().Get("Allow") != http.MethodDelete {
+		t.Fatalf("Allow header %q", rec.Header().Get("Allow"))
+	}
 }
 
 func TestCancelAfterTheCutoffIsTooLate(t *testing.T) {

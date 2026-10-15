@@ -65,6 +65,7 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
     listStaff: (locationId, serviceId) => call((e) => structuredClone(e.staff(locationId, serviceId))),
     listSlots: (query) => call((e) => e.listSlots(query)),
     createHold: (req) => call((e) => e.hold(req)),
+    releaseHold: (bookingId, holdToken) => call((e) => e.release(bookingId, holdToken)),
     confirmHold: (holdToken, customer, key) => call((e) => e.confirm(holdToken, customer, key)),
     getBooking: (id, token) => call((e) => e.get(id, token)),
     cancelBooking: (id, token) => call((e) => e.cancel(id, token)),

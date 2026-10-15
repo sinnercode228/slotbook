@@ -28,6 +28,8 @@ interface ActiveHold {
   totalMs: number;
   /** One key per hold, so a retried confirm is answered with the first result. */
   idempotencyKey: string;
+  /** The details of the last confirm sent with that key; a replay must repeat them. */
+  sent?: Customer;
 }
 
 type TimeNotice = { kind: 'taken'; start: string } | { kind: 'invalid' } | { kind: 'expired' } | { kind: 'failed'; error: unknown };
@@ -55,6 +57,7 @@ type Action =
   | { type: 'holdFailed'; start: string; error: unknown }
   | { type: 'holdExpired' }
   | { type: 'pickAgain'; notice: TimeNotice | null }
+  | { type: 'confirmSent'; customer: Customer }
   | { type: 'confirmed'; confirmation: Confirmation }
   | { type: 'restart' };
 
@@ -115,8 +118,11 @@ function reducer(state: State, action: Action): State {
         ? { ...state, step: 'time', staffList: action.staffList }
         : { ...state, step: 'time', staff: action.staff, staffList: action.staffList, hold: null, notice: null, hidden: [] };
     }
-    case 'goto':
-      return { ...state, step: action.step, notice: action.step === 'time' ? state.notice : null };
+    case 'goto': {
+      // Leaving the contact form gives the hold up; see releaseHold.
+      const dropped = state.step === 'details' ? { hold: null, holdExpired: false } : {};
+      return { ...state, ...dropped, step: action.step, notice: action.step === 'time' ? state.notice : null };
+    }
     case 'held':
       return { ...state, step: 'details', hold: action.hold, holdExpired: false, notice: null };
     case 'holdFailed': {
@@ -131,6 +137,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, holdExpired: true };
     case 'pickAgain':
       return { ...state, step: 'time', hold: null, holdExpired: false, notice: action.notice };
+    case 'confirmSent':
+      return state.hold ? { ...state, hold: { ...state.hold, sent: action.customer } } : state;
     case 'confirmed':
       return { ...state, step: 'done', confirmation: action.confirmation, hold: null };
     case 'restart':
@@ -204,6 +212,7 @@ export function BookingWidget() {
 
   async function confirm(customer: Customer) {
     if (!hold) return;
+    dispatch({ type: 'confirmSent', customer });
     setConfirming(true);
     setFormError(null);
     setServerProblem(null);
@@ -227,6 +236,32 @@ export function BookingWidget() {
 
   const onHoldExpired = useCallback(() => dispatch({ type: 'holdExpired' }), []);
 
+  /**
+   * Gives the running hold back, so that its time is free at once, for others
+   * and for a visitor who now wants a time overlapping it. Nobody waits for
+   * the answer: if the call fails, the hold runs out on its own.
+   */
+  function releaseHold() {
+    if (!hold || state.holdExpired) return;
+    const { hold: held, idempotencyKey, sent } = hold;
+    void api
+      .releaseHold(held.booking.id, held.hold_token)
+      .catch(async (error: unknown) => {
+        // A confirm whose answer was lost went through after all. Sent again
+        // with its key, it returns that booking and its manage link.
+        if (errorCode(error) !== 'already_confirmed' || !sent) throw error;
+        dispatch({ type: 'confirmed', confirmation: await api.confirmHold(held.hold_token, sent, idempotencyKey) });
+      })
+      .catch((error: unknown) => console.error('Could not release the hold', error))
+      // The list may have been loaded while the hold still counted as busy.
+      .finally(() => setRefreshKey((n) => n + 1));
+  }
+
+  function goBack(target: Step) {
+    if (step === 'details') releaseHold();
+    dispatch({ type: 'goto', step: target });
+  }
+
   function timeNotice() {
     const notice = state.notice;
     if (!notice || !location) return null;
@@ -242,7 +277,7 @@ export function BookingWidget() {
     }
   }
 
-  const back = PREVIOUS[step] ? () => dispatch({ type: 'goto', step: PREVIOUS[step]! }) : undefined;
+  const back = PREVIOUS[step] ? () => goBack(PREVIOUS[step]!) : undefined;
   const header = (title: string) =>
     step !== 'done' && <StepHeader step={STEP_NUMBER[step]} title={title} onBack={back} />;
 
@@ -394,7 +429,7 @@ export function BookingWidget() {
   return (
     <div className={styles.layout} ref={containerRef}>
       <div className={styles.main}>
-        <SummaryBar {...summary} onEdit={(target) => dispatch({ type: 'goto', step: target })} />
+        <SummaryBar {...summary} onEdit={goBack} />
         <div className={styles.card}>{body()}</div>
       </div>
       <SummaryCard {...summary} />

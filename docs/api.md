@@ -23,17 +23,18 @@ Every response carries `X-Request-ID` (an incoming one is kept if it is up to
 | 400 | `bad_request` | Malformed JSON, unknown field, missing or unparseable parameter |
 | 401 | `unauthorized` | Admin route without a valid bearer token |
 | 404 | `not_found` | Unknown location, service, booking, block or route; wrong manage token |
-| 404 | `hold_not_found` | Confirm with an unknown hold token |
+| 404 | `hold_not_found` | Confirm with an unknown hold token; release an unknown hold or with a wrong token |
 | 405 | `method_not_allowed` | Known path, other method (see `Allow`) |
 | 409 | `slot_taken` | The period overlaps an active booking, hold or block |
-| 409 | `already_confirmed` | Confirm on a hold that was already confirmed |
+| 409 | `already_confirmed` | Confirm or release a hold that was already confirmed |
 | 409 | `too_late` | Cancel or reschedule after the location's cancellation cutoff |
 | 409 | `not_active` | Cancel or reschedule a booking that is not confirmed |
-| 410 | `hold_expired` | Confirm after the hold ran out |
+| 409 | `hold_expired` | Release a hold that already ran out |
+| 410 | `hold_expired` | Confirm after the hold ran out or was released |
 | 413 | `payload_too_large` | Body over 64 KB |
 | 422 | `invalid_slot` | Start is not an offered slot (off the step grid, outside hours, inside the minimum notice, beyond the horizon); the message says which |
 | 422 | `invalid_staff` | The staff member does not offer the service |
-| 422 | `validation_failed` | A field is invalid (contact details, block times, Idempotency-Key) |
+| 422 | `validation_failed` | A field is missing or invalid (contact details, hold token, block times, Idempotency-Key) |
 | 422 | `idempotency_key_reused` | Same Idempotency-Key with a different request |
 | 500 | `internal` | Anything else |
 
@@ -138,6 +139,25 @@ id) and moves on to the next one if that slot was just taken.
 ```
 
 Errors: `invalid_slot`, `invalid_staff`, `slot_taken`, `not_found`.
+
+### `DELETE /v1/holds/{holdID}`
+
+Gives a hold back before it runs out, so that its time can be booked again
+at once. `holdID` is the `booking.id` of the hold; the hold token goes in the
+body, as when confirming:
+
+```json
+{"hold_token": "i9BYK3fK_BoJgUH8l2gClZX8zof7jij7-uwz5pFmOTQ"}
+```
+
+`204 No Content`, also for a hold that was already released, so a retry is
+safe. The booking's status becomes `released`; like an expired hold, it no
+longer blocks the period, and confirming it answers `410 hold_expired`.
+Holds have no notifications, and releasing one queues none.
+
+Errors: `hold_not_found` (unknown hold, or a token that is not this hold's),
+`already_confirmed` (409), `hold_expired` (409: the hold already ran out),
+`validation_failed` (no `hold_token`).
 
 ### `POST /v1/bookings`
 

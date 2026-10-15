@@ -77,8 +77,8 @@ func (m *Manager) DeleteBlock(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListForDay returns appointments (except lapsed holds) and blocks of a
-// location that overlap the given local date, ordered by start.
+// ListForDay returns appointments (except lapsed and released holds) and
+// blocks of a location that overlap the given local date, ordered by start.
 func (m *Manager) ListForDay(ctx context.Context, locationID int64, date slots.Date) ([]Booking, error) {
 	loc, err := m.catalog.Location(ctx, locationID)
 	if errors.Is(err, catalog.ErrNotFound) {
@@ -89,7 +89,7 @@ func (m *Manager) ListForDay(ctx context.Context, locationID int64, date slots.D
 	}
 	rows, err := m.pool.Query(ctx, `
 		SELECT `+bookingColumns+` FROM bookings
-		WHERE location_id = $1 AND starts_at < $3 AND busy_until > $2 AND status <> 'expired'
+		WHERE location_id = $1 AND starts_at < $3 AND busy_until > $2 AND status NOT IN ('expired', 'released')
 		ORDER BY starts_at, staff_id, created_at`,
 		loc.ID, date.Start(loc.Zone), date.AddDays(1).Start(loc.Zone))
 	if err != nil {
