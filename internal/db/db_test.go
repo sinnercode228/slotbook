@@ -91,11 +91,15 @@ func TestExclusionConstraintIgnoresInactiveRows(t *testing.T) {
 			status, locationID, staffID, serviceID, start, start.Add(time.Hour))
 		return err
 	}
-	if err := insertHold("expired"); err != nil {
-		t.Fatal(err)
+	// A hold that ran out and one its customer gave back carry no contact
+	// details and leave the period free.
+	for _, status := range []string{"expired", "released"} {
+		if err := insertHold(status); err != nil {
+			t.Fatalf("insert a %s hold: %v", status, err)
+		}
 	}
 	if err := insertHold("held"); err != nil {
-		t.Fatalf("an expired hold blocked a new one: %v", err)
+		t.Fatalf("an inactive hold blocked a new one: %v", err)
 	}
 	if err := insertHold("held"); !db.IsExclusionViolation(err) {
 		t.Fatalf("second active hold: got %v, want an exclusion violation", err)
