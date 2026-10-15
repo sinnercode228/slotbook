@@ -202,7 +202,7 @@ cd web && npm run lint && npm test
 
 Go: 123 test functions and 92 subtests pass, counted as `pass` events in `go test -json`. 67 of the 123 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds, confirms and releases, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end. The subtests include the 23 slot vectors.
 
-Web: 129 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 33 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, an expired hold, a hold given back, a lost connection, a reload), the manage page, `.ics` files and i18n.
+Web: 130 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 33 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, an expired hold, a hold given back, a lost connection, a reload), the manage page, `.ics` files and i18n.
 
 [`ci.yml`](.github/workflows/ci.yml) runs gofmt, `go vet`, staticcheck and the race tests against a PostgreSQL 16 service, then the web lint, tests and build, then builds the Docker image.
 

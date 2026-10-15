@@ -159,6 +159,30 @@ describe('BookingWidget', () => {
     expect(createHold).toHaveBeenCalledTimes(2);
   });
 
+  it('reloads the times once a slow release has gone through', async () => {
+    let finish!: () => void;
+    const { user } = setup((base) => ({
+      releaseHold: (id, token) =>
+        new Promise<void>((resolve, reject) => {
+          finish = () => void base.releaseHold(id, token).then(resolve, reject);
+        }),
+    }));
+    const slots = await reachSlots(user);
+    const times = slots.map(salonTime);
+    await user.click(slots[0]!);
+    await screen.findByRole('timer');
+    const shown = () => {
+      const [group] = screen.getAllByRole('group', { name: /^(Morning|Afternoon|Evening)$/ });
+      return within(group!).getAllByRole('button').map(salonTime);
+    };
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    // A list loaded before the server has the hold back still counts it as busy.
+    await waitFor(() => expect(shown()).not.toContain(times[0]));
+    finish();
+    await waitFor(() => expect(shown()).toEqual(times));
+  });
+
   it('gives the hold back when the visitor changes the specialist from the contact form', async () => {
     const releaseHold = vi.fn();
     const { user } = setup((base) => ({ releaseHold: releaseHold.mockImplementation(base.releaseHold) }));
