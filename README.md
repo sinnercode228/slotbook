@@ -66,7 +66,7 @@ Write-up on why the constraint decides and not a check in Go, what the second in
 
 ## Holds: ten minutes, then the slot is free again
 
-Picking a time creates a row with `status = 'held'` and `hold_expires_at` ten minutes ahead (`hold_ttl_seconds` per location; the defaults are in [`config.go`](internal/config/config.go#L27-L33)). The client gets a 32-byte random hold token, and the table stores only its SHA-256 hash.
+Picking a time creates a row with `status = 'held'` and `hold_expires_at` ten minutes ahead (`hold_ttl_seconds` per location; the defaults are in [`config.go`](internal/config/config.go#L28-L34)). The client gets a 32-byte random hold token, and the table stores only its SHA-256 hash.
 
 No background job has to run for a hold to expire. Three places compare `hold_expires_at` with the current time:
 
@@ -209,7 +209,7 @@ SLOTBOOK_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/slotbook
 cd web && npm run lint && npm test
 ```
 
-Go: 128 test functions and 120 subtests pass, counted as `pass` events in `go test -json`. 60 of the 128 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds and confirms, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end, the hold limit included. Unit tests drive the hold limiter with a fake clock (burst, refill, eviction) and check the client address rules (a made-up `X-Forwarded-For`, proxy chains, IPv6). The subtests include the 23 slot vectors.
+Go: 128 test functions and 122 subtests pass, counted as `pass` events in `go test -json`. 60 of the 128 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds and confirms, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end, the hold limit included. Unit tests drive the hold limiter with a fake clock (burst, refill, eviction) and check the client address rules (a made-up `X-Forwarded-For`, proxy chains, IPv6). The subtests include the 23 slot vectors.
 
 Web: 122 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 28 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, a hold refused for too many attempts, an expired hold, a lost connection, a reload), the manage page, `.ics` files and i18n.
 

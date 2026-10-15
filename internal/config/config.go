@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -151,7 +152,7 @@ func holdLimit(getenv func(string) string) (ratelimit.Limit, error) {
 	v := strings.TrimSpace(getenv("SLOTBOOK_HOLD_RATE"))
 	switch v {
 	case "":
-		return limit, nil
+		return limit, checkRefill(limit)
 	case "0":
 		return ratelimit.Limit{}, nil
 	}
@@ -168,7 +169,17 @@ func holdLimit(getenv func(string) string) (ratelimit.Limit, error) {
 		return ratelimit.Limit{}, nil
 	}
 	limit.Count, limit.Per = count, per
-	return limit, nil
+	return limit, checkRefill(limit)
+}
+
+// checkRefill refuses a limit whose empty bucket takes longer to refill
+// than a time.Duration holds: the limiter's arithmetic would wrap around
+// and refuse every hold.
+func checkRefill(limit ratelimit.Limit) error {
+	if int64(limit.Burst) >= math.MaxInt64/int64(limit.Interval()) {
+		return fmt.Errorf("config: SLOTBOOK_HOLD_BURST %d at this SLOTBOOK_HOLD_RATE would take over 290 years to refill (SLOTBOOK_HOLD_RATE=0 turns the limit off)", limit.Burst)
+	}
+	return nil
 }
 
 func ratePeriod(v string) (time.Duration, error) {

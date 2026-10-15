@@ -114,6 +114,8 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		"zero period":          {"SLOTBOOK_HOLD_RATE": "10/0s"},
 		"zero burst":           {"SLOTBOOK_HOLD_BURST": "0"},
 		"burst in words":       {"SLOTBOOK_HOLD_BURST": "many"},
+		"burst never refills":  {"SLOTBOOK_HOLD_BURST": "1000000000"},
+		"rate never refills":   {"SLOTBOOK_HOLD_RATE": "1/2000000h"},
 		"bad proxy prefix":     {"SLOTBOOK_TRUSTED_PROXIES": "10.0.0.0/33"},
 		"proxy host name":      {"SLOTBOOK_TRUSTED_PROXIES": "proxy.internal"},
 	}

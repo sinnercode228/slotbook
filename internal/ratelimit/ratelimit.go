@@ -24,6 +24,9 @@ type Limit struct {
 // does not.
 func (l Limit) Enabled() bool { return l.Count > 0 && l.Per > 0 && l.Burst > 0 }
 
+// Interval is how long an enabled limit takes to give one token back.
+func (l Limit) Interval() time.Duration { return max(l.Per/time.Duration(l.Count), time.Nanosecond) }
+
 // Limiter applies one Limit to each key separately. It is safe for
 // concurrent use.
 type Limiter struct {
@@ -38,7 +41,7 @@ type Limiter struct {
 
 // New returns a limiter for an enabled limit.
 func New(limit Limit, clk clock.Clock) *Limiter {
-	interval := max(limit.Per/time.Duration(limit.Count), time.Nanosecond)
+	interval := limit.Interval()
 	return &Limiter{
 		clock:     clk,
 		interval:  interval,
