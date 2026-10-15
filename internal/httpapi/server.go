@@ -59,6 +59,7 @@ func (s *server) routes() {
 	m.HandleFunc("GET /v1/locations/{locationID}/slots", s.listSlots)
 
 	m.HandleFunc("POST /v1/holds", s.createHold)
+	m.HandleFunc("DELETE /v1/holds/{holdID}", s.releaseHold)
 	m.HandleFunc("POST /v1/bookings", s.confirmHold)
 	m.HandleFunc("GET /v1/bookings/{bookingID}", s.getBooking)
 	m.HandleFunc("POST /v1/bookings/{bookingID}/cancel", s.cancelBooking)
