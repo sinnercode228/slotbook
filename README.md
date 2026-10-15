@@ -29,7 +29,7 @@ CONSTRAINT bookings_no_overlap EXCLUDE USING gist (staff_id WITH =, period WITH 
     WHERE (status IN ('held', 'confirmed'))
 ```
 
-`btree_gist` lets one GiST index combine equality on `staff_id` with the range overlap operator `&&`. The ranges are half-open, so a booking may start exactly when the previous one's buffer ends. Cancelled and expired rows fall outside the `WHERE`: they stay in the table as history and block nothing. A CHECK, `bookings_period_matches`, keeps `period` equal to `tstzrange(starts_at, busy_until, '[)')`, so no row can carry a period that disagrees with its times.
+`btree_gist` lets one GiST index combine equality on `staff_id` with the range overlap operator `&&`. The ranges are half-open, so a booking may start exactly when the previous one's buffer ends. Cancelled, expired and released rows fall outside the `WHERE`: they stay in the table as history and block nothing. A CHECK, `bookings_period_matches`, keeps `period` equal to `tstzrange(starts_at, busy_until, '[)')`, so no row can carry a period that disagrees with its times.
 
 The Go code never looks for overlaps before inserting. `Hold` checks only that the start is one the slot generator offers for the specialist's working hours ([`offers`](internal/booking/availability.go#L140-L149) passes no busy time), then inserts and lets PostgreSQL decide ([`insertHold`](internal/booking/hold.go#L133-L156)). A conflicting insert fails with SQLSTATE `23P01`, which becomes `ErrSlotTaken` and `409 slot_taken`. A read-then-insert check would race; the constraint does not, because the second insert waits for the transaction that holds the conflicting row:
 
@@ -50,7 +50,7 @@ sequenceDiagram
     API-->>B: 409 slot_taken
 ```
 
-Two inserts that arrive at the same moment can also each find the other's uncommitted row and wait for it. So can an insert and the confirmation of a hold it overlaps, because confirming writes a new version of the held row. PostgreSQL's deadlock detector then aborts one of them with `40P01` after `deadlock_timeout` (1 s by default). Holds, confirmations, blocks and reschedules run their transactions through [`inTx`](internal/booking/tx.go#L20-L54), which runs a transaction aborted this way again from the start (at most five runs in all), so instead of a `500` the loser still gets `409 slot_taken` and the confirmation goes through.
+Two inserts that arrive at the same moment can also each find the other's uncommitted row and wait for it. So can an insert and the confirmation of a hold it overlaps, because confirming writes a new version of the held row. PostgreSQL's deadlock detector then aborts one of them with `40P01` after `deadlock_timeout` (1 s by default). Holds, confirmations, releases, blocks and reschedules run their transactions through [`inTx`](internal/booking/tx.go#L20-L54), which runs a transaction aborted this way again from the start (at most five runs in all), so instead of a `500` the loser still gets `409 slot_taken` and the confirmation goes through.
 
 The same constraint covers every other path that puts time on a calendar:
 
@@ -78,7 +78,9 @@ The sweeper in `serve` ([`sweep.go`](internal/booking/sweep.go)) runs every `SLO
 
 Confirming takes an `Idempotency-Key` header. The key is inserted with `ON CONFLICT DO NOTHING` inside the confirming transaction, so a concurrent retry with the same key waits on that insert until the first request commits, then reads the stored response and returns it with `Idempotent-Replayed: true` ([`confirm.go:126-158`](internal/booking/confirm.go#L126-L158)). The stored response includes the plain manage token, because a client that lost the first response needs it; the 24-hour pruning limits how long it sits in the table. The same key with another body is `422 idempotency_key_reused`. The widget makes one key per hold, so pressing "Confirm booking" again after a dropped connection returns the first result, manage link included, instead of `409 already_confirmed`.
 
-The countdown does not trust the device clock. The widget takes the hold length from the server's `expires_at - created_at` and counts it down from the moment the hold arrived ([`BookingWidget.tsx:190`](web/src/widget/BookingWidget.tsx#L190)). At zero it says the time was released and sends the customer back to the list; a confirm that loses to the clock gets `410` and ends the same way. A reload keeps the step, the running hold and the typed details, because the widget saves its progress in `sessionStorage` ([`progress.ts`](web/src/widget/progress.ts)).
+The countdown does not trust the device clock. The widget takes the hold length from the server's `expires_at - created_at` and counts it down from the moment the hold arrived ([`BookingWidget.tsx:193`](web/src/widget/BookingWidget.tsx#L193)). At zero it says the time was released and sends the customer back to the list; a confirm that loses to the clock gets `410` and ends the same way. A reload keeps the step, the running hold and the typed details, because the widget saves its progress in `sessionStorage` ([`progress.ts`](web/src/widget/progress.ts)).
+
+A customer who goes back from the contact form gives the hold back. `DELETE /v1/holds/{id}` takes the hold token in the body, as a confirm does, locks the row, compares the token's hash with the stored one in constant time and marks the hold `released` ([`release.go`](internal/booking/release.go#L18-L57)). That status is outside the constraint's `WHERE`, so the time and every start overlapping it can be held again at once. Releasing it again answers `204` too; a confirmed hold is `409 already_confirmed`, one that ran out is `409 hold_expired`, and a wrong token is `404 hold_not_found`, as on confirm. The widget does not wait for the answer; once it arrives, the list of times reloads, so the starts next to the old hold come back ([`BookingWidget.tsx:233-250`](web/src/widget/BookingWidget.tsx#L233-L250)). A failed release is logged to the console, and that hold runs out on its own. The request is sent with `keepalive`, so closing the tab right after does not cancel it.
 
 ![The staff day view for Snipwell Berlin on Wednesday 14 October: a held slot with a dashed border, confirmed bookings, two blocks, and the outbox with pending reminders](docs/screenshots/admin-day.png)
 
@@ -132,7 +134,7 @@ WHERE n.id = due.id
 ## Known limitations
 
 - `POST /v1/holds` needs no login and has no rate limit, so a script could keep every slot of a salon held, ten minutes at a time. Fixing it needs a per-client limit and a decision about which client address to trust behind a proxy.
-- There is no call to release a hold. A customer who goes back and picks another time leaves the first one blocked until it expires; if they pick it again, the widget reuses their own hold.
+- Closing the tab on the contact form leaves the time held until the hold runs out. The widget keeps a running hold across a reload, and a page that is being unloaded cannot tell a reload from a close, so it does not release on unload.
 - Delivery is at least once. A worker that dies after a send and before it records the outcome leaves the row to be sent again when its lease ends.
 - Messages go to Telegram when the customer gave a chat id and `SLOTBOOK_TELEGRAM_BOT_TOKEN` is set, and to the server log otherwise. Phone and email are stored, but nothing sends to them.
 - Locations, services, staff and working hours come only from a seed file; the API cannot edit them. The admin API is guarded by one shared bearer token, not by staff accounts.
@@ -198,9 +200,9 @@ SLOTBOOK_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/slotbook
 cd web && npm run lint && npm test
 ```
 
-Go: 115 test functions and 92 subtests pass, counted as `pass` events in `go test -json`. 59 of the 115 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds and confirms, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end. The subtests include the 23 slot vectors.
+Go: 123 test functions and 92 subtests pass, counted as `pass` events in `go test -json`. 67 of the 123 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds, confirms and releases, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end. The subtests include the 23 slot vectors.
 
-Web: 121 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 28 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, an expired hold, a lost connection, a reload), the manage page, `.ics` files and i18n.
+Web: 129 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 33 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, an expired hold, a hold given back, a lost connection, a reload), the manage page, `.ics` files and i18n.
 
 [`ci.yml`](.github/workflows/ci.yml) runs gofmt, `go vet`, staticcheck and the race tests against a PostgreSQL 16 service, then the web lint, tests and build, then builds the Docker image.
 
