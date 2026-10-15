@@ -18,6 +18,7 @@ const en = {
   'common.optional': 'optional',
   'common.error.network': 'We could not reach the booking service. Check your connection and try again.',
   'common.error.generic': 'Something went wrong on our side. Please try again.',
+  'common.error.rate_limited': 'Too many reservations from your connection in a short time. Please wait a minute and try again.',
 
   'step.progress': 'Step {current} of {total}',
   'step.location': 'Choose a salon',
@@ -196,6 +197,7 @@ const ru: Dictionary = {
   'common.optional': 'необязательно',
   'common.error.network': 'Не удалось связаться с сервисом записи. Проверьте подключение и попробуйте ещё раз.',
   'common.error.generic': 'Что-то пошло не так на нашей стороне. Попробуйте ещё раз.',
+  'common.error.rate_limited': 'Слишком много бронирований с вашего подключения за короткое время. Подождите минуту и попробуйте ещё раз.',
 
   'step.progress': 'Шаг {current} из {total}',
   'step.location': 'Выберите салон',

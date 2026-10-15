@@ -15,6 +15,7 @@ export type ErrorCode =
   | 'invalid_staff'
   | 'validation_failed'
   | 'idempotency_key_reused'
+  | 'rate_limited'
   | 'internal'
   | 'network';
 
