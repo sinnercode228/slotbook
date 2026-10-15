@@ -194,6 +194,29 @@ describe('BookingWidget', () => {
     expect(releaseHold).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the booking when going back finds that a confirm with a lost answer went through', async () => {
+    const confirm = vi.fn();
+    const { user } = setup((base) => ({
+      // The server confirms, but its answer never arrives.
+      confirmHold: confirm
+        .mockImplementationOnce(async (...args: Parameters<BookingApi['confirmHold']>) => {
+          await base.confirmHold(...args);
+          throw new ApiError(0, 'network', 'Failed to fetch');
+        })
+        .mockImplementation(base.confirmHold),
+    }));
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    await fillAndConfirm(user);
+    expect(await screen.findByText(/The booking was not confirmed because the connection failed/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByRole('heading', { name: 'You’re booked' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage booking' })).toBeInTheDocument();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm.mock.calls[1]).toEqual(confirm.mock.calls[0]);
+  });
+
   it('logs a release that failed and lets the visitor pick a time again', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     onTestFinished(() => logged.mockRestore());

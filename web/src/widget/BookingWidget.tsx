@@ -28,6 +28,8 @@ interface ActiveHold {
   totalMs: number;
   /** One key per hold, so a retried confirm is answered with the first result. */
   idempotencyKey: string;
+  /** The details of the last confirm sent with that key; a replay must repeat them. */
+  sent?: Customer;
 }
 
 type TimeNotice = { kind: 'taken'; start: string } | { kind: 'invalid' } | { kind: 'expired' } | { kind: 'failed'; error: unknown };
@@ -55,6 +57,7 @@ type Action =
   | { type: 'holdFailed'; start: string; error: unknown }
   | { type: 'holdExpired' }
   | { type: 'pickAgain'; notice: TimeNotice | null }
+  | { type: 'confirmSent'; customer: Customer }
   | { type: 'confirmed'; confirmation: Confirmation }
   | { type: 'restart' };
 
@@ -134,6 +137,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, holdExpired: true };
     case 'pickAgain':
       return { ...state, step: 'time', hold: null, holdExpired: false, notice: action.notice };
+    case 'confirmSent':
+      return state.hold ? { ...state, hold: { ...state.hold, sent: action.customer } } : state;
     case 'confirmed':
       return { ...state, step: 'done', confirmation: action.confirmation, hold: null };
     case 'restart':
@@ -207,6 +212,7 @@ export function BookingWidget() {
 
   async function confirm(customer: Customer) {
     if (!hold) return;
+    dispatch({ type: 'confirmSent', customer });
     setConfirming(true);
     setFormError(null);
     setServerProblem(null);
@@ -237,8 +243,15 @@ export function BookingWidget() {
    */
   function releaseHold() {
     if (!hold || state.holdExpired) return;
+    const { hold: held, idempotencyKey, sent } = hold;
     void api
-      .releaseHold(hold.hold.booking.id, hold.hold.hold_token)
+      .releaseHold(held.booking.id, held.hold_token)
+      .catch(async (error: unknown) => {
+        // A confirm whose answer was lost went through after all. Sent again
+        // with its key, it returns that booking and its manage link.
+        if (errorCode(error) !== 'already_confirmed' || !sent) throw error;
+        dispatch({ type: 'confirmed', confirmation: await api.confirmHold(held.hold_token, sent, idempotencyKey) });
+      })
       .catch((error: unknown) => console.error('Could not release the hold', error))
       // The list may have been loaded while the hold still counted as busy.
       .finally(() => setRefreshKey((n) => n + 1));
