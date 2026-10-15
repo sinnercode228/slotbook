@@ -21,6 +21,7 @@ import (
 	"github.com/sinnercode228/slotbook/internal/config"
 	"github.com/sinnercode228/slotbook/internal/dbtest"
 	"github.com/sinnercode228/slotbook/internal/httpapi"
+	"github.com/sinnercode228/slotbook/internal/ratelimit"
 	"github.com/sinnercode228/slotbook/internal/seed"
 	"github.com/sinnercode228/slotbook/internal/slots"
 )
@@ -37,7 +38,7 @@ type api struct {
 	ids     seed.Result
 }
 
-func newAPI(t *testing.T, staticDir string) api {
+func newAPI(t *testing.T, staticDir string, opts ...func(*httpapi.Deps)) api {
 	t.Helper()
 	pool := dbtest.New(t)
 	var weekdays slots.WeeklyHours
@@ -64,7 +65,7 @@ func newAPI(t *testing.T, staticDir string) api {
 	}
 	clk := clock.NewFake(now)
 	cat := catalog.NewStore(pool, config.LocationDefaults)
-	handler := httpapi.New(httpapi.Deps{
+	deps := httpapi.Deps{
 		DB:          pool,
 		Catalog:     cat,
 		Bookings:    booking.NewManager(pool, cat, clk),
@@ -73,11 +74,21 @@ func newAPI(t *testing.T, staticDir string) api {
 		AdminToken:  adminToken,
 		CORSOrigins: []string{"https://widget.example.com"},
 		StaticDir:   staticDir,
-	})
-	return api{t: t, handler: handler, clock: clk, ids: ids}
+	}
+	for _, opt := range opts {
+		opt(&deps)
+	}
+	return api{t: t, handler: httpapi.New(deps), clock: clk, ids: ids}
 }
 
 func (a api) do(method, path string, body any, headers ...string) *httptest.ResponseRecorder {
+	a.t.Helper()
+	return a.doFrom("", method, path, body, headers...)
+}
+
+// doFrom sends the request from the TCP peer remote; "" keeps httptest's
+// 192.0.2.1:1234.
+func (a api) doFrom(remote, method, path string, body any, headers ...string) *httptest.ResponseRecorder {
 	a.t.Helper()
 	var reader io.Reader
 	switch b := body.(type) {
@@ -92,6 +103,9 @@ func (a api) do(method, path string, body any, headers ...string) *httptest.Resp
 		reader = bytes.NewReader(raw)
 	}
 	req := httptest.NewRequest(method, path, reader)
+	if remote != "" {
+		req.RemoteAddr = remote
+	}
 	if reader != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -363,6 +377,44 @@ func TestConfirmErrorsAndIdempotency(t *testing.T) {
 
 	bad := map[string]any{"hold_token": expired.HoldToken, "customer": map[string]any{"name": "Anna", "phone": "call me"}}
 	expectError(t, a.do(http.MethodPost, "/v1/bookings", bad), http.StatusUnprocessableEntity, "validation_failed")
+}
+
+func TestHoldsAreLimitedPerClientAddress(t *testing.T) {
+	a := newAPI(t, "", func(d *httpapi.Deps) {
+		d.HoldLimit = ratelimit.Limit{Count: 2, Per: time.Minute, Burst: 3}
+	})
+	const visitor, neighbour = "203.0.113.7:40000", "198.51.100.20:40000"
+	holdFrom := func(remote, staffKey, start string, headers ...string) *httptest.ResponseRecorder {
+		t.Helper()
+		body := map[string]any{"service_id": a.ids.Services["cut"], "staff_id": a.ids.Staff[staffKey], "start": start}
+		return a.doFrom(remote, http.MethodPost, "/v1/holds", body, headers...)
+	}
+
+	var first holdView
+	for i, start := range []string{"2026-10-14T10:00:00+02:00", "2026-10-14T11:00:00+02:00", "2026-10-14T12:00:00+02:00"} {
+		rec := holdFrom(visitor, "lena", start)
+		expectStatus(t, rec, http.StatusCreated)
+		if i == 0 {
+			first = decode[holdView](t, rec)
+		}
+	}
+	limited := holdFrom(visitor, "jonas", "2026-10-14T10:00:00+02:00")
+	expectError(t, limited, http.StatusTooManyRequests, "rate_limited")
+	if got := limited.Header().Get("Retry-After"); got != "30" {
+		t.Fatalf("Retry-After %q, want 30", got)
+	}
+	expectError(t, holdFrom(visitor, "jonas", "2026-10-14T10:00:00+02:00", "X-Forwarded-For", "192.0.2.99"),
+		http.StatusTooManyRequests, "rate_limited")
+
+	// The refused hold never reached the database: the slot is still free.
+	expectStatus(t, holdFrom(neighbour, "jonas", "2026-10-14T10:00:00+02:00"), http.StatusCreated)
+	// Confirming spends no hold budget.
+	rec := a.doFrom(visitor, http.MethodPost, "/v1/bookings", map[string]any{"hold_token": first.HoldToken, "customer": customer})
+	expectStatus(t, rec, http.StatusCreated)
+
+	a.clock.Advance(30 * time.Second)
+	expectStatus(t, holdFrom(visitor, "jonas", "2026-10-14T11:00:00+02:00"), http.StatusCreated)
+	expectError(t, holdFrom(visitor, "jonas", "2026-10-14T12:00:00+02:00"), http.StatusTooManyRequests, "rate_limited")
 }
 
 func TestCancelAfterTheCutoffIsTooLate(t *testing.T) {

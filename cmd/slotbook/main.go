@@ -121,6 +121,9 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	if cfg.Dev {
 		log.Warn("SLOTBOOK_DEV is set: weak admin tokens are accepted")
 	}
+	if !cfg.HoldLimit.Enabled() {
+		log.Warn("SLOTBOOK_HOLD_RATE is 0: POST /v1/holds has no rate limit")
+	}
 	if cfg.StaticDir != "" {
 		if _, err := os.Stat(filepath.Join(cfg.StaticDir, "index.html")); err != nil {
 			log.Warn("static directory has no index.html, serving the API only", "dir", cfg.StaticDir)
@@ -146,14 +149,16 @@ func serve(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	srv := &http.Server{
 		Addr: cfg.Addr,
 		Handler: httpapi.New(httpapi.Deps{
-			DB:          pool,
-			Catalog:     cat,
-			Bookings:    bookings,
-			Clock:       clk,
-			Log:         log,
-			AdminToken:  cfg.AdminToken,
-			CORSOrigins: cfg.CORSOrigins,
-			StaticDir:   cfg.StaticDir,
+			DB:             pool,
+			Catalog:        cat,
+			Bookings:       bookings,
+			Clock:          clk,
+			Log:            log,
+			AdminToken:     cfg.AdminToken,
+			CORSOrigins:    cfg.CORSOrigins,
+			StaticDir:      cfg.StaticDir,
+			HoldLimit:      cfg.HoldLimit,
+			TrustedProxies: cfg.TrustedProxies,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

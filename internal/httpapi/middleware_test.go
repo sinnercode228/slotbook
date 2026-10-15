@@ -8,6 +8,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/sinnercode228/slotbook/internal/clock"
+	"github.com/sinnercode228/slotbook/internal/ratelimit"
 )
 
 var quietLog = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -89,6 +93,9 @@ func TestCORS(t *testing.T) {
 	if !strings.Contains(rec.Header().Get("Vary"), "Origin") {
 		t.Fatal("responses that depend on Origin must say so in Vary")
 	}
+	if expose := rec.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(expose, "Retry-After") {
+		t.Fatalf("Access-Control-Expose-Headers %q hides Retry-After from the widget", expose)
+	}
 
 	open := cors([]string{"*"})(okHandler)
 	rec = httptest.NewRecorder()
@@ -121,6 +128,76 @@ func TestRequestIDIsCreatedOrPassedThrough(t *testing.T) {
 	h.ServeHTTP(httptest.NewRecorder(), req)
 	if seen == "" || strings.ContainsAny(seen, " \n") {
 		t.Fatalf("unsafe incoming id kept: %q", seen)
+	}
+}
+
+func TestLimitByClient(t *testing.T) {
+	clk := clock.NewFake(time.Date(2026, time.October, 12, 8, 0, 0, 0, time.UTC))
+	limiter := ratelimit.New(ratelimit.Limit{Count: 2, Per: time.Minute, Burst: 2}, clk)
+	h := limitByClient(limiter, prefixes(t, "10.0.0.0/8"))(okHandler)
+	send := func(peer string, headers ...string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/v1/holds", nil)
+		req.RemoteAddr = peer
+		for i := 0; i+1 < len(headers); i += 2 {
+			req.Header.Set(headers[i], headers[i+1])
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	for i := 0; i < 2; i++ {
+		if rec := send("203.0.113.7:40000"); rec.Code != http.StatusNoContent {
+			t.Fatalf("request %d: status %d", i+1, rec.Code)
+		}
+	}
+	rec := send("203.0.113.7:40001")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("third request: status %d, want 429", rec.Code)
+	}
+	if got := rec.Header().Get("Retry-After"); got != "30" {
+		t.Fatalf("Retry-After %q, want 30", got)
+	}
+	assertError(t, rec, "rate_limited")
+
+	if rec := send("203.0.113.7:40002", "X-Forwarded-For", "198.51.100.20"); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("a made-up X-Forwarded-For from a direct client got status %d", rec.Code)
+	}
+	if rec := send("198.51.100.20:40000"); rec.Code != http.StatusNoContent {
+		t.Fatalf("another address: status %d", rec.Code)
+	}
+
+	// Behind the trusted proxy each forwarded client has its own bucket.
+	for _, client := range []string{"192.0.2.1", "192.0.2.1", "192.0.2.2", "192.0.2.2"} {
+		if rec := send("10.0.0.5:443", "X-Forwarded-For", client); rec.Code != http.StatusNoContent {
+			t.Fatalf("%s through the proxy: status %d", client, rec.Code)
+		}
+	}
+	if rec := send("10.0.0.5:443", "X-Forwarded-For", "192.0.2.1"); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("third request of 192.0.2.1 through the proxy: status %d", rec.Code)
+	}
+
+	clk.Advance(30 * time.Second)
+	if rec := send("203.0.113.7:40003"); rec.Code != http.StatusNoContent {
+		t.Fatalf("after Retry-After: status %d", rec.Code)
+	}
+}
+
+func TestRetryAfterRoundsUp(t *testing.T) {
+	clk := clock.NewFake(time.Date(2026, time.October, 12, 8, 0, 0, 0, time.UTC))
+	// One token every 8.57 seconds.
+	h := limitByClient(ratelimit.New(ratelimit.Limit{Count: 7, Per: time.Minute, Burst: 1}, clk), nil)(okHandler)
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/holds", nil))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/holds", nil))
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "9" {
+		t.Fatalf("status %d, Retry-After %q; want 429 and 9", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	clk.Advance(8 * time.Second)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/holds", nil))
+	if rec.Header().Get("Retry-After") != "1" {
+		t.Fatalf("Retry-After %q with 0.57 s to go, want 1", rec.Header().Get("Retry-After"))
 	}
 }
 
