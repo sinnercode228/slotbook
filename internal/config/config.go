@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sinnercode228/slotbook/internal/ratelimit"
 )
 
 // LocationSettings are the booking rules of one location.
@@ -32,6 +36,10 @@ var LocationDefaults = LocationSettings{
 // MinAdminTokenLength is enforced unless SLOTBOOK_DEV is set.
 const MinAdminTokenLength = 32
 
+// DefaultHoldLimit lets one client address make ten holds at once and two
+// a minute after that.
+var DefaultHoldLimit = ratelimit.Limit{Count: 2, Per: time.Minute, Burst: 10}
+
 type Config struct {
 	DatabaseURL      string
 	Addr             string
@@ -44,6 +52,8 @@ type Config struct {
 	LogLevel         slog.Level
 	WorkerInterval   time.Duration
 	SweepInterval    time.Duration
+	HoldLimit        ratelimit.Limit
+	TrustedProxies   []netip.Prefix
 }
 
 // Load builds a Config from getenv (os.Getenv in production).
@@ -73,6 +83,12 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	if cfg.SweepInterval, err = positiveDuration(getenv, "SLOTBOOK_SWEEP_INTERVAL", 30*time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.HoldLimit, err = holdLimit(getenv); err != nil {
+		return Config{}, err
+	}
+	if cfg.TrustedProxies, err = prefixList(getenv, "SLOTBOOK_TRUSTED_PROXIES"); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
@@ -120,4 +136,87 @@ func positiveDuration(getenv func(string) string, key string, def time.Duration)
 		return 0, fmt.Errorf("config: %s must be positive", key)
 	}
 	return d, nil
+}
+
+// holdLimit reads SLOTBOOK_HOLD_RATE, a count per period ("10/min", "1/s",
+// "120/h", "5/10m") or "0" for no limit, and SLOTBOOK_HOLD_BURST.
+func holdLimit(getenv func(string) string) (ratelimit.Limit, error) {
+	limit := DefaultHoldLimit
+	if v := getenv("SLOTBOOK_HOLD_BURST"); v != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n <= 0 {
+			return ratelimit.Limit{}, errors.New("config: SLOTBOOK_HOLD_BURST must be a positive integer (SLOTBOOK_HOLD_RATE=0 turns the limit off)")
+		}
+		limit.Burst = n
+	}
+	v := strings.TrimSpace(getenv("SLOTBOOK_HOLD_RATE"))
+	switch v {
+	case "":
+		return limit, checkRefill(limit)
+	case "0":
+		return ratelimit.Limit{}, nil
+	}
+	countText, periodText, _ := strings.Cut(v, "/")
+	count, err := strconv.Atoi(strings.TrimSpace(countText))
+	if err != nil || count < 0 || periodText == "" {
+		return ratelimit.Limit{}, fmt.Errorf("config: SLOTBOOK_HOLD_RATE %q must be a count per period, such as 10/min, or 0", v)
+	}
+	per, err := ratePeriod(strings.TrimSpace(periodText))
+	if err != nil {
+		return ratelimit.Limit{}, fmt.Errorf("config: SLOTBOOK_HOLD_RATE: %w", err)
+	}
+	if count == 0 {
+		return ratelimit.Limit{}, nil
+	}
+	limit.Count, limit.Per = count, per
+	return limit, checkRefill(limit)
+}
+
+// checkRefill refuses a limit whose empty bucket takes longer to refill
+// than a time.Duration holds: the limiter's arithmetic would wrap around
+// and refuse every hold.
+func checkRefill(limit ratelimit.Limit) error {
+	if int64(limit.Burst) >= math.MaxInt64/int64(limit.Interval()) {
+		return fmt.Errorf("config: SLOTBOOK_HOLD_BURST %d at this SLOTBOOK_HOLD_RATE would take over 290 years to refill (SLOTBOOK_HOLD_RATE=0 turns the limit off)", limit.Burst)
+	}
+	return nil
+}
+
+func ratePeriod(v string) (time.Duration, error) {
+	switch v {
+	case "s":
+		return time.Second, nil
+	case "m", "min":
+		return time.Minute, nil
+	case "h":
+		return time.Hour, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("period %q must be s, min, h or a positive duration such as 10m", v)
+	}
+	return d, nil
+}
+
+// prefixList reads comma-separated CIDR prefixes; a bare address stands for
+// itself alone.
+func prefixList(getenv func(string) string, key string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, item := range splitList(getenv(key)) {
+		p, err := netip.ParsePrefix(item)
+		if err != nil {
+			a, addrErr := netip.ParseAddr(item)
+			if addrErr != nil {
+				return nil, fmt.Errorf("config: %s: %q is neither a CIDR prefix nor an IP address", key, item)
+			}
+			a = a.WithZone("").Unmap()
+			p = netip.PrefixFrom(a, a.BitLen())
+		}
+		// Peers are compared in IPv4 form, which a mapped prefix never contains.
+		if p.Addr().Is4In6() && p.Bits() >= 96 {
+			p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+		}
+		out = append(out, p.Masked())
+	}
+	return out, nil
 }

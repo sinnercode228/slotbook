@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/sinnercode228/slotbook/internal/ratelimit"
 	"github.com/sinnercode228/slotbook/internal/token"
 )
 
@@ -108,7 +112,7 @@ func recoverPanics(log *slog.Logger) func(http.Handler) http.Handler {
 const (
 	corsAllowMethods  = "GET, POST, DELETE, OPTIONS"
 	corsAllowHeaders  = "Authorization, Content-Type, Idempotency-Key, X-Manage-Token, X-Request-ID"
-	corsExposeHeaders = "Idempotent-Replayed, X-Request-ID"
+	corsExposeHeaders = "Idempotent-Replayed, Retry-After, X-Request-ID"
 )
 
 // cors allows the configured widget origins ("*" allows any). Preflight
@@ -151,6 +155,27 @@ func requireAdmin(expected string) func(http.Handler) http.Handler {
 			if !strings.EqualFold(scheme, "Bearer") || !token.Equal(strings.TrimSpace(given), expected) {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="slotbook-admin"`)
 				writeError(w, http.StatusUnauthorized, "unauthorized", "a valid admin bearer token is required")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// limitByClient answers 429 with Retry-After, in whole seconds rounded up,
+// once the client address has used up its requests.
+func limitByClient(l *ratelimit.Limiter, trusted []netip.Prefix) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			key := r.RemoteAddr
+			if a := clientAddr(r, trusted); a.IsValid() {
+				key = limitKey(a)
+			}
+			if ok, wait := l.Allow(key); !ok {
+				seconds := int((wait + time.Second - 1) / time.Second)
+				w.Header().Set("Retry-After", strconv.Itoa(seconds))
+				writeError(w, http.StatusTooManyRequests, "rate_limited",
+					fmt.Sprintf("too many requests from this address, try again in %d s", seconds))
 				return
 			}
 			next.ServeHTTP(w, r)

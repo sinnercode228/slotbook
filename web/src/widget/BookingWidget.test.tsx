@@ -66,6 +66,31 @@ describe('BookingWidget', () => {
     expect(screen.queryByRole('button', { name: new RegExp(`^${time}`) })).not.toBeInTheDocument();
   });
 
+  it('asks the visitor to wait when the server refuses a hold for too many attempts', async () => {
+    const { user } = setup(() => ({
+      createHold: vi
+        .fn()
+        .mockRejectedValue(new ApiError(429, 'rate_limited', 'too many requests from this address, try again in 30 s')),
+    }));
+    const [slot] = await reachSlots(user);
+    const time = salonTime(slot!);
+    await user.click(slot!);
+    expect(await screen.findByText('Too many reservations from your connection in a short time. Please wait a minute and try again.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Choose a time' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: new RegExp(`^${time}`) })).toBeInTheDocument();
+  });
+
+  it('tells the visitor how long to wait when the server says so', async () => {
+    const { user } = setup(() => ({
+      createHold: vi.fn().mockRejectedValue(new ApiError(429, 'rate_limited', 'try again in 90 s', 90)),
+    }));
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    expect(
+      await screen.findByText('Too many reservations from your connection in a short time. Please try again in 2 min.'),
+    ).toBeInTheDocument();
+  });
+
   it('sends the visitor back to the times when the hold ran out on the server', async () => {
     const { user } = setup(() => ({
       confirmHold: vi.fn().mockRejectedValue(new ApiError(410, 'hold_expired', 'hold has expired')),

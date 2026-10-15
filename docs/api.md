@@ -36,6 +36,7 @@ Every response carries `X-Request-ID` (an incoming one is kept if it is up to
 | 422 | `invalid_staff` | The staff member does not offer the service |
 | 422 | `validation_failed` | A field is missing or invalid (contact details, hold token, block times, Idempotency-Key) |
 | 422 | `idempotency_key_reused` | Same Idempotency-Key with a different request |
+| 429 | `rate_limited` | Too many holds from one client address; `Retry-After` gives the seconds to wait |
 | 500 | `internal` | Anything else |
 
 ## Health
@@ -138,7 +139,19 @@ id) and moves on to the next one if that slot was just taken.
 }
 ```
 
-Errors: `invalid_slot`, `invalid_staff`, `slot_taken`, `not_found`.
+Errors: `invalid_slot`, `invalid_staff`, `slot_taken`, `not_found`,
+`rate_limited`.
+
+Each client address may make `SLOTBOOK_HOLD_BURST` holds at once (10 by
+default), then `SLOTBOOK_HOLD_RATE` more (2 a minute by default). A request
+counts whatever it is answered, a `409` included. Past the limit the answer
+is `429 rate_limited` with `Retry-After: <seconds>`; that request holds
+nothing and costs nothing.
+The client address is the TCP peer; `X-Forwarded-For` is read only from the
+proxies listed in `SLOTBOOK_TRUSTED_PROXIES`, and IPv6 addresses count per
+/64. Each server process keeps its own counts in memory. Confirming and
+releasing are not limited, and releasing a hold does not give back the
+request that made it.
 
 ### `DELETE /v1/holds/{holdID}`
 
@@ -314,4 +327,4 @@ longer matched them when they came due; `failed` rows ran out of retries
 Browsers may call the API from the origins in `SLOTBOOK_CORS_ORIGINS`
 (comma-separated, `*` for any). Allowed request headers: `Authorization`,
 `Content-Type`, `Idempotency-Key`, `X-Manage-Token`, `X-Request-ID`. Exposed
-response headers: `Idempotent-Replayed`, `X-Request-ID`.
+response headers: `Idempotent-Replayed`, `Retry-After`, `X-Request-ID`.

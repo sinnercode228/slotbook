@@ -2,10 +2,13 @@ package config
 
 import (
 	"log/slog"
+	"net/netip"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sinnercode228/slotbook/internal/ratelimit"
 )
 
 func env(vars map[string]string) func(string) string {
@@ -26,6 +29,9 @@ func TestLoadDefaults(t *testing.T) {
 	if len(cfg.CORSOrigins) != 0 || cfg.Dev {
 		t.Fatalf("unexpected cors/dev: %+v", cfg)
 	}
+	if cfg.HoldLimit != (ratelimit.Limit{Count: 2, Per: time.Minute, Burst: 10}) || cfg.TrustedProxies != nil {
+		t.Fatalf("unexpected hold limit %+v or trusted proxies %v", cfg.HoldLimit, cfg.TrustedProxies)
+	}
 }
 
 func TestLoadReadsEverything(t *testing.T) {
@@ -41,6 +47,9 @@ func TestLoadReadsEverything(t *testing.T) {
 		"SLOTBOOK_LOG_LEVEL":          "debug",
 		"SLOTBOOK_WORKER_INTERVAL":    "2s",
 		"SLOTBOOK_SWEEP_INTERVAL":     "1m",
+		"SLOTBOOK_HOLD_RATE":          "30/h",
+		"SLOTBOOK_HOLD_BURST":         "4",
+		"SLOTBOOK_TRUSTED_PROXIES":    " 10.0.0.0/8, 2001:db8::/32 ,192.0.2.10,,10.1.2.3/8",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +63,60 @@ func TestLoadReadsEverything(t *testing.T) {
 	if !cfg.Dev || cfg.LogLevel != slog.LevelDebug || cfg.WorkerInterval != 2*time.Second || cfg.SweepInterval != time.Minute {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
+	if cfg.HoldLimit != (ratelimit.Limit{Count: 30, Per: time.Hour, Burst: 4}) {
+		t.Fatalf("hold limit %+v", cfg.HoldLimit)
+	}
+	wantProxies := []netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("2001:db8::/32"),
+		netip.MustParsePrefix("192.0.2.10/32"),
+		netip.MustParsePrefix("10.0.0.0/8"),
+	}
+	if !slices.Equal(cfg.TrustedProxies, wantProxies) {
+		t.Fatalf("trusted proxies %v, want %v", cfg.TrustedProxies, wantProxies)
+	}
+}
+
+func TestTrustedProxiesInIPv4MappedForm(t *testing.T) {
+	cfg, err := Load(env(map[string]string{
+		"SLOTBOOK_DATABASE_URL":    "postgres://x",
+		"SLOTBOOK_TRUSTED_PROXIES": "::ffff:10.0.0.0/104, ::ffff:192.0.2.10/128, ::ffff:198.51.100.7",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Peers are compared in IPv4 form, which a mapped prefix never contains.
+	want := []netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("192.0.2.10/32"),
+		netip.MustParsePrefix("198.51.100.7/32"),
+	}
+	if !slices.Equal(cfg.TrustedProxies, want) {
+		t.Fatalf("trusted proxies %v, want %v", cfg.TrustedProxies, want)
+	}
+}
+
+func TestHoldRateFormats(t *testing.T) {
+	cases := map[string]ratelimit.Limit{
+		"10/min":    {Count: 10, Per: time.Minute, Burst: 10},
+		"10/m":      {Count: 10, Per: time.Minute, Burst: 10},
+		"1/s":       {Count: 1, Per: time.Second, Burst: 10},
+		"120/h":     {Count: 120, Per: time.Hour, Burst: 10},
+		"5/10m":     {Count: 5, Per: 10 * time.Minute, Burst: 10},
+		" 3 / min ": {Count: 3, Per: time.Minute, Burst: 10},
+		"0":         {},
+		"0/min":     {},
+	}
+	for v, want := range cases {
+		cfg, err := Load(env(map[string]string{"SLOTBOOK_DATABASE_URL": "postgres://x", "SLOTBOOK_HOLD_RATE": v}))
+		if err != nil {
+			t.Errorf("%q: %v", v, err)
+			continue
+		}
+		if cfg.HoldLimit != want {
+			t.Errorf("%q: %+v, want %+v", v, cfg.HoldLimit, want)
+		}
+	}
 }
 
 func TestLoadRejectsBadValues(t *testing.T) {
@@ -63,6 +126,17 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		"bad log level":        {"SLOTBOOK_LOG_LEVEL": "loud"},
 		"bad interval":         {"SLOTBOOK_WORKER_INTERVAL": "soon"},
 		"zero interval":        {"SLOTBOOK_SWEEP_INTERVAL": "0s"},
+		"hold rate in words":   {"SLOTBOOK_HOLD_RATE": "ten/min"},
+		"hold rate, no period": {"SLOTBOOK_HOLD_RATE": "10"},
+		"unknown period":       {"SLOTBOOK_HOLD_RATE": "10/fortnight"},
+		"negative hold rate":   {"SLOTBOOK_HOLD_RATE": "-1/min"},
+		"zero period":          {"SLOTBOOK_HOLD_RATE": "10/0s"},
+		"zero burst":           {"SLOTBOOK_HOLD_BURST": "0"},
+		"burst in words":       {"SLOTBOOK_HOLD_BURST": "many"},
+		"burst never refills":  {"SLOTBOOK_HOLD_BURST": "1000000000"},
+		"rate never refills":   {"SLOTBOOK_HOLD_RATE": "1/2000000h"},
+		"bad proxy prefix":     {"SLOTBOOK_TRUSTED_PROXIES": "10.0.0.0/33"},
+		"proxy host name":      {"SLOTBOOK_TRUSTED_PROXIES": "proxy.internal"},
 	}
 	for name, vars := range cases {
 		t.Run(name, func(t *testing.T) {

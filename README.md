@@ -66,7 +66,7 @@ Write-up on why the constraint decides and not a check in Go, what the second in
 
 ## Holds: ten minutes, then the slot is free again
 
-Picking a time creates a row with `status = 'held'` and `hold_expires_at` ten minutes ahead (`hold_ttl_seconds` per location; the defaults are in [`config.go`](internal/config/config.go#L24-L30)). The client gets a 32-byte random hold token, and the table stores only its SHA-256 hash.
+Picking a time creates a row with `status = 'held'` and `hold_expires_at` ten minutes ahead (`hold_ttl_seconds` per location; the defaults are in [`config.go`](internal/config/config.go#L28-L34)). The client gets a 32-byte random hold token, and the table stores only its SHA-256 hash.
 
 No background job has to run for a hold to expire. Three places compare `hold_expires_at` with the current time:
 
@@ -85,6 +85,14 @@ A customer who goes back from the contact form gives the hold back. `DELETE /v1/
 ![The staff day view for Snipwell Berlin on Wednesday 14 October: a held slot with a dashed border, confirmed bookings, two blocks, and the outbox with pending reminders](docs/screenshots/admin-day.png)
 
 In the day view a running hold has a dashed border and stripes, confirmed bookings are solid and blocks are hatched. The strip below the dashed line inside a booking is its cleanup buffer, which the constraint covers too.
+
+## Holds per client address
+
+`POST /v1/holds` needs no login, so without a limit a script could keep every slot of a salon held, ten minutes at a time. Each client address therefore gets a token bucket ([`ratelimit.go`](internal/ratelimit/ratelimit.go)): 10 holds at once, then one every 30 seconds (`SLOTBOOK_HOLD_BURST=10`, `SLOTBOOK_HOLD_RATE=2/min`). With ten-minute holds that is at most about 30 live holds per address. Past that the answer is `429 rate_limited` with `Retry-After` in seconds, given before the request reaches the database, and the widget tells the visitor how long to wait. Confirming and releasing are not limited: both need a hold token, so the hold budget already bounds them, and a retry after a lost connection must not be refused. A released hold is not refunded, so a visitor who goes back and picks another time spends one more hold.
+
+The client address is the TCP peer. `X-Forwarded-For` counts only when the peer is listed in `SLOTBOOK_TRUSTED_PROXIES`, and then it is read from the right. Each proxy appends the address it saw, so the first entry that is not a trusted proxy is the client, and anything to the left of it was written by the client and is ignored ([`clientaddr.go`](internal/httpapi/clientaddr.go)). An entry that is not an address stops the walk at the proxy that passed it on. IPv6 clients are counted per /64, the block one subscriber usually gets whole.
+
+A bucket is stored as the time at which it will be full again. Past that time it answers like a new bucket, so a sweep once per refill window drops it, and memory holds only the addresses that asked for a hold, whatever the answer, in the last two windows (ten minutes with the defaults). The buckets live in the memory of the API process; Known limitations below says what that costs.
 
 ## Berlin on 29 March and 25 October
 
@@ -133,7 +141,7 @@ WHERE n.id = due.id
 
 ## Known limitations
 
-- `POST /v1/holds` needs no login and has no rate limit, so a script could keep every slot of a salon held, ten minutes at a time. Fixing it needs a per-client limit and a decision about which client address to trust behind a proxy.
+- The hold limit is counted per API process, in memory. Two processes behind a load balancer give each address two budgets, and a restart forgets every bucket. It is keyed by address, so customers behind one NAT share a budget, and a script spread over many addresses is slowed down, not stopped.
 - Closing the tab on the contact form leaves the time held until the hold runs out. The widget keeps a running hold across a reload, and a page that is being unloaded cannot tell a reload from a close, so it does not release on unload.
 - Delivery is at least once. A worker that dies after a send and before it records the outcome leaves the row to be sent again when its lease ends.
 - Messages go to Telegram when the customer gave a chat id and `SLOTBOOK_TELEGRAM_BOT_TOKEN` is set, and to the server log otherwise. Phone and email are stored, but nothing sends to them.
@@ -187,6 +195,9 @@ Service 5 is the Berlin haircut and staff 5 is Jonas W. in a freshly seeded data
 | `SLOTBOOK_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `SLOTBOOK_WORKER_INTERVAL` | `5s` | outbox polling interval |
 | `SLOTBOOK_SWEEP_INTERVAL` | `30s` | hold sweeper interval |
+| `SLOTBOOK_HOLD_RATE` | `2/min` | holds per client address once the burst is spent: a count per `s`, `min`, `h` or a duration such as `10m`; `0` turns the limit off |
+| `SLOTBOOK_HOLD_BURST` | `10` | holds a client address can make at once |
+| `SLOTBOOK_TRUSTED_PROXIES` | empty | comma-separated CIDRs or addresses of the reverse proxies whose `X-Forwarded-For` is read |
 | `SLOTBOOK_TEST_DATABASE_URL` | empty | integration tests only; they skip without it |
 
 The widget's build settings (`VITE_API_MODE`, `VITE_API_URL`, `VITE_BRAND_NAME`, `SLOTBOOK_API_TARGET`, `BASE_PATH`) are in [`web/.env.example`](web/.env.example).
@@ -200,9 +211,9 @@ SLOTBOOK_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/slotbook
 cd web && npm run lint && npm test
 ```
 
-Go: 123 test functions and 92 subtests pass, counted as `pass` events in `go test -json`. 67 of the 123 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds, confirms and releases, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end. The subtests include the 23 slot vectors.
+Go: 137 test functions and 122 subtests pass, counted as `pass` events in `go test -json`. 68 of the 137 are integration tests against PostgreSQL; each gets its own freshly migrated schema through `search_path` ([`dbtest.go`](internal/dbtest/dbtest.go)) and skips when `SLOTBOOK_TEST_DATABASE_URL` is unset. They cover the constraint, concurrent holds, confirms and releases, expiry without the sweeper, reschedules onto their own period, the cancellation cutoff, the outbox worker's leases and fencing, and the HTTP API end to end, the hold limit included. Unit tests drive the hold limiter with a fake clock (burst, refill, eviction) and check the client address rules (a made-up `X-Forwarded-For`, proxy chains, IPv6). The subtests include the 23 slot vectors.
 
-Web: 131 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 33 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, an expired hold, a hold given back, a lost connection, a reload), the manage page, `.ics` files and i18n.
+Web: 134 Vitest tests in 12 files: the same 23 vectors plus a check that the files were found, 33 for the mock's booking rules, 14 for contact validation, 9 for zone arithmetic, and the rest for the HTTP client, the slot picker, the contact form, the widget (a taken slot, a hold refused for too many attempts, an expired hold, a hold given back, a lost connection, a reload), the manage page, `.ics` files and i18n.
 
 [`ci.yml`](.github/workflows/ci.yml) runs gofmt, `go vet`, staticcheck and the race tests against a PostgreSQL 16 service, then the web lint, tests and build, then builds the Docker image.
 

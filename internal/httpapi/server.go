@@ -5,6 +5,7 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -12,6 +13,7 @@ import (
 	"github.com/sinnercode228/slotbook/internal/booking"
 	"github.com/sinnercode228/slotbook/internal/catalog"
 	"github.com/sinnercode228/slotbook/internal/clock"
+	"github.com/sinnercode228/slotbook/internal/ratelimit"
 )
 
 type Deps struct {
@@ -25,6 +27,11 @@ type Deps struct {
 	// StaticDir, if set, is served at / with index.html as the fallback for
 	// client-side routes.
 	StaticDir string
+	// HoldLimit applies to POST /v1/holds per client address; the zero Limit
+	// turns it off. The client address is the TCP peer, or, behind one of
+	// TrustedProxies, read from X-Forwarded-For (see clientAddr).
+	HoldLimit      ratelimit.Limit
+	TrustedProxies []netip.Prefix
 }
 
 type server struct {
@@ -58,7 +65,11 @@ func (s *server) routes() {
 	m.HandleFunc("GET /v1/locations/{locationID}/staff", s.listStaff)
 	m.HandleFunc("GET /v1/locations/{locationID}/slots", s.listSlots)
 
-	m.HandleFunc("POST /v1/holds", s.createHold)
+	limitHolds := func(h http.Handler) http.Handler { return h }
+	if s.HoldLimit.Enabled() {
+		limitHolds = limitByClient(ratelimit.New(s.HoldLimit, s.Clock), s.TrustedProxies)
+	}
+	m.Handle("POST /v1/holds", limitHolds(http.HandlerFunc(s.createHold)))
 	m.HandleFunc("DELETE /v1/holds/{holdID}", s.releaseHold)
 	m.HandleFunc("POST /v1/bookings", s.confirmHold)
 	m.HandleFunc("GET /v1/bookings/{bookingID}", s.getBooking)
