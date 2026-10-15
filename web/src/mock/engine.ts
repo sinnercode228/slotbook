@@ -287,6 +287,23 @@ export class Engine {
     throw slotTaken();
   }
 
+  /**
+   * Gives a running hold back. A released hold may be released again; a
+   * confirmed or lapsed one is a conflict, and a wrong token looks like a
+   * missing hold.
+   */
+  release(bookingId: string, holdToken: string): void {
+    if (!holdToken) throw validation('hold_token: is required');
+    const row = this.state.bookings.find((b) => b.id === bookingId && b.kind === 'appointment');
+    if (!row || row.holdToken !== holdToken) throw new ApiError(404, 'hold_not_found', 'hold not found');
+    if (row.status === 'released') return;
+    if (row.status === 'confirmed' || row.status === 'cancelled') {
+      throw new ApiError(409, 'already_confirmed', 'hold is already confirmed');
+    }
+    if (row.status !== 'held' || row.holdExpiresAt! <= this.now) throw new ApiError(409, 'hold_expired', 'hold has expired');
+    row.status = 'released';
+  }
+
   /** Fewest confirmed appointments on that date first, then the lowest id. */
   private orderByLoad(staff: Staff[], date: LocalDate, zone: string): Staff[] {
     const dayStart = startOfDate(date, zone);
@@ -469,7 +486,10 @@ export class Engine {
     const dayStart = startOfDate(day, loc.time_zone);
     const dayEnd = startOfDate(addDays(day, 1), loc.time_zone);
     const rows = this.state.bookings
-      .filter((b) => b.locationId === loc.id && b.start < dayEnd && b.busyUntil > dayStart && b.status !== 'expired')
+      .filter(
+        (b) =>
+          b.locationId === loc.id && b.start < dayEnd && b.busyUntil > dayStart && b.status !== 'expired' && b.status !== 'released',
+      )
       .sort((a, b) => a.start - b.start || a.staffId - b.staffId || a.createdAt - b.createdAt);
     return { location_id: loc.id, date: day, time_zone: loc.time_zone, bookings: rows.map((b) => this.view(b)) };
   }

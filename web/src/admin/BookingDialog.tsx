@@ -18,7 +18,7 @@ interface BookingDialogProps {
   onChanged: () => void;
 }
 
-const TONE = { confirmed: 'accent', held: 'info', cancelled: 'danger', expired: undefined } as const;
+const TONE = { confirmed: 'accent', held: 'info', cancelled: 'danger', expired: undefined, released: undefined } as const;
 
 export function BookingDialog({ booking: b, zone, staff, services, admin, onClose, onChanged }: BookingDialogProps) {
   const { t, locale } = useI18n();

@@ -1,8 +1,9 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { BookingApi } from '../api/client';
 import { ApiError } from '../api/errors';
+import type { Hold } from '../api/types';
 import { createMockApi } from '../mock/mockApi';
 import { memoryStorage } from '../mock/storage';
 import { renderWith } from '../test/render';
@@ -128,18 +129,60 @@ describe('BookingWidget', () => {
     expect(await screen.findByRole('heading', { name: 'Choose a salon' })).toBeInTheDocument();
   });
 
-  it('lets the visitor return to the time list without losing their own hold', async () => {
+  it('gives the hold back when the visitor goes back from the contact form', async () => {
     const createHold = vi.fn();
-    const { user } = setup((base) => ({ createHold: createHold.mockImplementation(base.createHold) }));
+    const releaseHold = vi.fn();
+    const { user } = setup((base) => ({
+      createHold: createHold.mockImplementation(base.createHold),
+      releaseHold: releaseHold.mockImplementation(base.releaseHold),
+    }));
+    const slots = await reachSlots(user);
+    const times = slots.map(salonTime);
+    await user.click(slots[0]!);
+    await screen.findByRole('timer');
+    const held = (await createHold.mock.results[0]!.value) as Hold;
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(releaseHold).toHaveBeenCalledTimes(1);
+    expect(releaseHold).toHaveBeenCalledWith(held.booking.id, held.hold_token);
+    // Every time is offered again, the ones the hold overlapped too, and
+    // none is marked as the visitor's own.
+    await waitFor(() => {
+      const [group] = screen.getAllByRole('group', { name: /^(Morning|Afternoon|Evening)$/ });
+      expect(within(group!).getAllByRole('button').map(salonTime)).toEqual(times);
+      expect(within(group!).queryAllByRole('button', { pressed: true })).toEqual([]);
+    });
+
+    const [group] = screen.getAllByRole('group', { name: /^(Morning|Afternoon|Evening)$/ });
+    await user.click(within(group!).getAllByRole('button')[0]!);
+    expect(await screen.findByRole('timer')).toHaveTextContent('10:00');
+    expect(createHold).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives the hold back when the visitor changes the specialist from the contact form', async () => {
+    const releaseHold = vi.fn();
+    const { user } = setup((base) => ({ releaseHold: releaseHold.mockImplementation(base.releaseHold) }));
     const [slot] = await reachSlots(user);
-    const time = salonTime(slot!);
     await user.click(slot!);
     await screen.findByRole('timer');
+    await user.click(within(screen.getByRole('list', { name: 'Your booking' })).getByRole('button', { name: 'Lena H.' }));
+    expect(await screen.findByRole('heading', { name: 'Choose a specialist' })).toBeInTheDocument();
+    expect(releaseHold).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a release that failed and lets the visitor pick a time again', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => logged.mockRestore());
+    const failure = new ApiError(0, 'network', 'Failed to fetch');
+    const { user } = setup(() => ({ releaseHold: vi.fn().mockRejectedValue(failure) }));
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    await screen.findByRole('timer');
+
     await user.click(screen.getByRole('button', { name: 'Back' }));
-    const held = await screen.findByRole('button', { name: new RegExp(`^${time}`) });
-    expect(held).toHaveAttribute('aria-pressed', 'true');
-    await user.click(held);
+    await waitFor(() => expect(logged).toHaveBeenCalledWith(expect.any(String), failure));
+    const [group] = await screen.findAllByRole('group', { name: /^(Morning|Afternoon|Evening)$/ });
+    await user.click(within(group!).getAllByRole('button')[0]!);
     expect(await screen.findByRole('timer')).toBeInTheDocument();
-    expect(createHold).toHaveBeenCalledTimes(1);
   });
 });
