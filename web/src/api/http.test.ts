@@ -68,6 +68,21 @@ describe('http api client', () => {
     expect(err).toMatchObject({ status: 409, code: 'slot_taken', message: 'slot is already taken' });
   });
 
+  it('keeps the seconds from Retry-After when a hold is refused for too many attempts', async () => {
+    const responses = [
+      new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'try again in 90 s' } }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '90' },
+      }),
+      jsonResponse(429, { error: { code: 'rate_limited', message: 'too many requests' } }),
+    ];
+    const { fetchImpl } = recordingFetch(() => responses.shift()!);
+    const api = createHttpApi('', fetchImpl);
+    const hold = () => api.createHold({ serviceId: 5, staffId: 4, start: '2026-10-14T10:00:00+02:00' });
+    await expect(hold()).rejects.toMatchObject({ status: 429, code: 'rate_limited', retryAfter: 90 });
+    await expect(hold()).rejects.toMatchObject({ status: 429, code: 'rate_limited', retryAfter: undefined });
+  });
+
   it('reports a response without a JSON error body as internal', async () => {
     const { fetchImpl } = recordingFetch(() => new Response('<html>Bad gateway</html>', { status: 502 }));
     await expect(createHttpApi('', fetchImpl).listLocations()).rejects.toMatchObject({

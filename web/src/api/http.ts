@@ -29,11 +29,18 @@ function query(params: Record<string, string | number | null | undefined>): stri
   return s ? `?${s}` : '';
 }
 
+/** Retry-After in seconds; the API never sends the HTTP-date form. */
+function retryAfterSeconds(res: Response): number | undefined {
+  const value = res.headers.get('Retry-After')?.trim();
+  return value && /^\d+$/.test(value) ? Number(value) : undefined;
+}
+
 async function readError(res: Response): Promise<ApiError> {
   try {
     const body = (await res.json()) as { error?: { code?: string; message?: string } };
     if (body.error?.code) {
-      return new ApiError(res.status, body.error.code as ErrorCode, body.error.message ?? body.error.code);
+      const message = body.error.message ?? body.error.code;
+      return new ApiError(res.status, body.error.code as ErrorCode, message, retryAfterSeconds(res));
     }
   } catch {
     // Not JSON: a proxy or gateway answered instead of the API.

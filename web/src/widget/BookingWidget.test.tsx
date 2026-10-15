@@ -79,6 +79,17 @@ describe('BookingWidget', () => {
     expect(screen.getByRole('button', { name: new RegExp(`^${time}`) })).toBeInTheDocument();
   });
 
+  it('tells the visitor how long to wait when the server says so', async () => {
+    const { user } = setup(() => ({
+      createHold: vi.fn().mockRejectedValue(new ApiError(429, 'rate_limited', 'try again in 90 s', 90)),
+    }));
+    const [slot] = await reachSlots(user);
+    await user.click(slot!);
+    expect(
+      await screen.findByText('Too many reservations from your connection in a short time. Please try again in 2 min.'),
+    ).toBeInTheDocument();
+  });
+
   it('sends the visitor back to the times when the hold ran out on the server', async () => {
     const { user } = setup(() => ({
       confirmHold: vi.fn().mockRejectedValue(new ApiError(410, 'hold_expired', 'hold has expired')),
