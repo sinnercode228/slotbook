@@ -90,7 +90,7 @@ In the day view a running hold has a dashed border and stripes, confirmed bookin
 
 The client address is the TCP peer. `X-Forwarded-For` counts only when the peer is listed in `SLOTBOOK_TRUSTED_PROXIES`, and then it is read from the right. Each proxy appends the address it saw, so the first entry that is not a trusted proxy is the client, and anything to the left of it was written by the client and is ignored ([`clientaddr.go`](internal/httpapi/clientaddr.go)). An entry that is not an address stops the walk at the proxy that passed it on. IPv6 clients are counted per /64, the block one subscriber usually gets whole.
 
-A bucket is stored as the time at which it will be full again. Past that time it answers like a new bucket, so a sweep once per refill window drops it, and memory holds only the addresses that made a hold in the last two windows (ten minutes with the defaults). The buckets live in the memory of the API process; Known limitations below says what that costs.
+A bucket is stored as the time at which it will be full again. Past that time it answers like a new bucket, so a sweep once per refill window drops it, and memory holds only the addresses that asked for a hold, whatever the answer, in the last two windows (ten minutes with the defaults). The buckets live in the memory of the API process; Known limitations below says what that costs.
 
 ## Berlin on 29 March and 25 October
 
